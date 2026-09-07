@@ -1,0 +1,18 @@
+{
+  "name": "otrbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OTR-managed Discord automation for The Trading Foundation.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node --check src/index.js && node --check src/config/serverBlueprint.js && node --check src/services/syncServer.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0"
+  }
+}
