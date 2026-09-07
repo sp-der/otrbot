@@ -59,8 +59,16 @@ async function ensureRoles(guild) {
     role = role ? await role.edit(options) : await guild.roles.create(options);
     map.set(definition.key, role);
   }
+  await guild.roles.fetch();
   const ordered = [...blueprint.roles].reverse();
-  await guild.roles.setPositions(ordered.map((d, i) => ({ role: map.get(d.key).id, position: i + 1 })));
+  const slots = ordered.map(d => guild.roles.cache.get(map.get(d.key).id).rawPosition).sort((a, b) => a - b);
+  try {
+    await guild.roles.setPositions(ordered.map((d, i) => ({ role: map.get(d.key).id, position: slots[i] })));
+    console.log('[roles] hierarchy ordered within existing role slots');
+  } catch (error) {
+    if (error.code !== 50013) throw error;
+    console.warn('[roles] Discord restricts role ordering; existing positions preserved. Channel permissions will still be applied.');
+  }
   return map;
 }
 
