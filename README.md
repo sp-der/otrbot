@@ -9,7 +9,11 @@ OTR-managed Discord automation for **The Trading Foundation**.
 - Creates/updates the approved role hierarchy
 - Creates/updates the approved category + channel structure
 - Applies tier-based channel visibility for Essentials, Live, Advanced, and Private
-- Never deletes existing channels or roles during sync
+- Normal sync preserves existing channels and roles
+- Owner-authorized rebuild can remove channels created before a fixed cutoff
+- Official information channels are read-only for members; live trading voice is listen-only
+- Community ranks never unlock paid areas
+- Verifies live channel and role permissions after sync
 - Keeps the Discord token out of GitHub
 
 ## Railway environment variables
@@ -56,3 +60,17 @@ Higher tiers inherit access to lower-tier areas through Discord permission overw
 - Whop membership-role integration support
 - Course/onboarding messages and pinned content
 - Scheduled live-session announcements
+
+## Authorized channel rebuild
+
+`DISCORD_REBUILD_BEFORE` is an optional fixed ISO timestamp, restricted to guild
+`1423037046498263043`. With `ENABLE_SERVER_SYNC=true`, startup removes channels
+created on or before that timestamp and rebuilds the blueprint. This deletes the
+old channels and their message history. Never set the timestamp dynamically.
+New channels are newer than the cutoff and survive restarts. Clear the variable
+(set to an empty string) after `[sync] VERIFIED COMPLETE` appears in logs.
+Normal `/sync` never deletes channels. Channel messages and Whop integration are
+not configured by this layout operation. Existing roles and assignments outside
+the blueprint are preserved; no paid or staff roles are assigned automatically.
+
+Run `node --test` for the tier/rank permission matrix and interrupted rebuild checks.

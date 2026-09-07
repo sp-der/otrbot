@@ -17,10 +17,13 @@ const roles = [
   { key: 'live', name: '🥈 Foundation Live', color: COLORS.silver, hoist: true },
   { key: 'essentials', name: '🥉 Foundation Essentials', color: COLORS.green, hoist: true },
   { key: 'member', name: '✅ Member', color: COLORS.navy, hoist: false },
-  { key: 'student', name: '📘 Student', color: COLORS.silver, hoist: false },
-  { key: 'developing', name: '📗 Developing Trader', color: COLORS.green, hoist: false },
-  { key: 'disciplined', name: '📙 Disciplined Trader', color: COLORS.champagne, hoist: false },
+  { key: 'elite', name: '🐅 Foundation Elite', color: COLORS.gold, hoist: false },
   { key: 'veteran', name: '🏆 Foundation Veteran', color: COLORS.gold, hoist: false },
+  { key: 'foundation', name: '🎓 Foundation Trader', color: COLORS.champagne, hoist: false },
+  { key: 'disciplined', name: '📙 Disciplined Trader', color: COLORS.champagne, hoist: false },
+  { key: 'developing', name: '📗 Developing Trader', color: COLORS.green, hoist: false },
+  { key: 'student', name: '📘 Student', color: COLORS.silver, hoist: false },
+  { key: 'new', name: '🌱 New Trader', color: COLORS.silver, hoist: false },
 ];
 
 const access = {
@@ -126,6 +129,17 @@ for (const group of channels) {
     if (Array.isArray(item)) return textChannel(item[0], item[1]);
     return item;
   });
+}
+
+const officialChannels = new Set([
+  '📚・course-guide', '🌅・daily-bias', '📈・trade-breakdowns',
+  '🌙・market-recaps', '📅・economic-calendar', '🎫・book-a-session',
+]);
+for (const [index, group] of channels.entries()) {
+  for (const child of group.children) {
+    if (index === 0 || officialChannels.has(child.name)) child.mode = 'readonly';
+    if (child.name === '🔊 Live Trading') child.mode = 'listen';
+  }
 }
 
 module.exports = {

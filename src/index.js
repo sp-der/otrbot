@@ -43,7 +43,8 @@ const commands = [
     .setDescription('Check whether OTR Bot is online and connected.'),
   new SlashCommandBuilder()
     .setName('sync')
-    .setDescription('Sync The Trading Foundation server blueprint.'),
+    .setDescription('Sync The Trading Foundation server blueprint.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map((command) => command.toJSON());
 
 function canManage(interaction) {
@@ -65,7 +66,7 @@ client.once('ready', async () => {
 
   if (syncEnabled) {
     try {
-      await syncServer(guild, client.user.id);
+      await syncServer(guild, client.user.id, { rebuildBefore: process.env.DISCORD_REBUILD_BEFORE });
     } catch (error) {
       console.error('Startup server sync failed:', error);
     }
@@ -75,7 +76,7 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand() || interaction.guildId !== guildId) return;
 
   if (interaction.commandName === 'health') {
     await interaction.reply({
