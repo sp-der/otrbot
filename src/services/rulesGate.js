@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const {
   EmbedBuilder,
@@ -7,8 +8,8 @@ const {
 const RULES_CHANNEL_NAME = '📜・rules';
 const MEMBER_ROLE_NAME = '✅ Member';
 const RULES_TITLE = '📜 SERVER RULES';
-const RULES_HEADER_PATH = path.join(__dirname, '../../assets/ttf-rules-header.webp');
-const RULES_HEADER_NAME = 'ttf-rules-header.webp';
+const RULES_HEADER_DATA_PATH = path.join(__dirname, '../../assets/ttf-rules-header.b64');
+const RULES_HEADER_NAME = 'ttf-rules-header.jpg';
 const GOLD = 0xd4af37;
 
 const ruleFields = [
@@ -54,6 +55,15 @@ const ruleFields = [
   },
 ];
 
+function loadRulesHeader() {
+  const encoded = fs.readFileSync(RULES_HEADER_DATA_PATH, 'utf8').trim();
+  const buffer = Buffer.from(encoded, 'base64');
+  if (!buffer.length || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    throw new Error('Rules header image data is invalid.');
+  }
+  return buffer;
+}
+
 function buildRulesEmbeds() {
   const header = new EmbedBuilder()
     .setColor(GOLD)
@@ -86,7 +96,7 @@ async function ensureRulesGate(guild, botUserId) {
 
   const recent = await channel.messages.fetch({ limit: 50 });
   const existing = recent.find((message) => isRulesGateMessage(message, botUserId));
-  const attachment = new AttachmentBuilder(RULES_HEADER_PATH, { name: RULES_HEADER_NAME });
+  const attachment = new AttachmentBuilder(loadRulesHeader(), { name: RULES_HEADER_NAME });
   const payload = {
     content: '',
     embeds: buildRulesEmbeds(),
@@ -96,7 +106,13 @@ async function ensureRulesGate(guild, botUserId) {
 
   let message;
   if (existing) {
-    message = await existing.edit({ ...payload, attachments: [] });
+    message = await existing.edit({
+      content: payload.content,
+      embeds: payload.embeds,
+      files: payload.files,
+      attachments: [],
+      allowedMentions: payload.allowedMentions,
+    });
   } else {
     message = await channel.send(payload);
   }
