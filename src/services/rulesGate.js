@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const {
   EmbedBuilder,
@@ -7,8 +8,8 @@ const {
 const RULES_CHANNEL_NAME = '📜・rules';
 const MEMBER_ROLE_NAME = '✅ Member';
 const RULES_TITLE = '📜 SERVER RULES';
-const RULES_HEADER_PATH = path.join(__dirname, '../../assets/ttf-rules-header-v2.jpg');
-const RULES_HEADER_NAME = 'ttf-rules-header-v2.jpg';
+const RULES_HEADER_BASE64_PATH = path.join(__dirname, '../../assets/ttf-rules-header.b64');
+const RULES_HEADER_NAME = 'ttf-rules-header-premium.webp';
 const GOLD = 0xd4af37;
 
 const ruleFields = [
@@ -75,8 +76,13 @@ function isRulesHeaderMessage(message, botUserId) {
   return Boolean(
     message
       && message.author?.id === botUserId
-      && message.attachments?.some((attachment) => attachment.name === RULES_HEADER_NAME),
+      && message.attachments?.some((attachment) => attachment.name?.startsWith('ttf-rules-header')),
   );
+}
+
+function loadRulesHeaderBuffer() {
+  const base64 = fs.readFileSync(RULES_HEADER_BASE64_PATH, 'utf8').trim();
+  return Buffer.from(base64, 'base64');
 }
 
 async function ensureRulesGate(guild, botUserId) {
@@ -86,10 +92,6 @@ async function ensureRulesGate(guild, botUserId) {
   );
   if (!channel) throw new Error(`Rules channel ${RULES_CHANNEL_NAME} was not found.`);
 
-  // The previous implementation placed the banner inside an otherwise empty embed.
-  // Discord collapses that image-only embed on some desktop/mobile clients, which is
-  // why it showed as a tiny black/gold sliver. Post the banner as a normal image
-  // attachment immediately above the rules embed instead.
   const recent = await channel.messages.fetch({ limit: 50 });
   const stale = recent.filter(
     (message) => isRulesGateMessage(message, botUserId) || isRulesHeaderMessage(message, botUserId),
@@ -101,7 +103,11 @@ async function ensureRulesGate(guild, botUserId) {
     });
   }
 
-  const headerAttachment = new AttachmentBuilder(RULES_HEADER_PATH, { name: RULES_HEADER_NAME });
+  const headerAttachment = new AttachmentBuilder(loadRulesHeaderBuffer(), {
+    name: RULES_HEADER_NAME,
+    description: 'The Trading Foundation',
+  });
+
   const headerMessage = await channel.send({
     files: [headerAttachment],
     allowedMentions: { parse: [] },
@@ -114,7 +120,7 @@ async function ensureRulesGate(guild, botUserId) {
 
   await rulesMessage.react('✅');
   console.log(
-    `[rules] posted fresh v3 gate in ${channel.name}: header=${headerMessage.id} rules=${rulesMessage.id}`,
+    `[rules] posted fresh v4 gate in ${channel.name}: header=${headerMessage.id} rules=${rulesMessage.id}`,
   );
   return rulesMessage;
 }
