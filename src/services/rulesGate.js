@@ -1,15 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 const {
-  EmbedBuilder,
+  MessageFlags,
   AttachmentBuilder,
 } = require('discord.js');
 
 const RULES_CHANNEL_NAME = '📜・rules';
 const MEMBER_ROLE_NAME = '✅ Member';
 const RULES_TITLE = '📜 SERVER RULES';
-const RULES_HEADER_BASE64_PATH = path.join(__dirname, '../../assets/ttf-rules-header.b64');
-const RULES_HEADER_NAME = 'ttf-rules-header-premium.jpg';
+const RULES_HEADER_PATH = path.join(__dirname, '../../assets/ttf-rules-header.png');
+const RULES_HEADER_NAME = 'ttf-rules-header.png';
 const GOLD = 0xd4af37;
 
 const ruleFields = [
@@ -55,21 +55,27 @@ const ruleFields = [
   },
 ];
 
-function buildRulesEmbed() {
-  return new EmbedBuilder()
-    .setColor(GOLD)
-    .setImage(`attachment://${RULES_HEADER_NAME}`)
-    .setTitle(RULES_TITLE)
-    .setDescription('Welcome to The Trading Foundation. Please read the server rules below and react with ✅ to confirm.')
-    .addFields(ruleFields)
-    .setFooter({ text: 'THE TRADING FOUNDATION • Trade • Learn • Grow • Together' });
+function buildRulesCard() {
+  return {
+    type: 17,
+    accent_color: GOLD,
+    components: [
+      { type: 12, items: [{ media: { url: `attachment://${RULES_HEADER_NAME}` }, description: 'The Trading Foundation' }] },
+      { type: 10, content: `## ${RULES_TITLE}\nWelcome to The Trading Foundation. Please read the server rules below and react with ✅ to confirm.` },
+      ...ruleFields.map(({ name, value }) => ({ type: 10, content: `**${name}**\n${value}` })),
+      { type: 14, divider: true, spacing: 1 },
+      { type: 10, content: '-# THE TRADING FOUNDATION • Trade • Learn • Grow • Together' },
+    ],
+  };
 }
 
 function isRulesGateMessage(message, botUserId) {
+  if (!message || message.author?.id !== botUserId) return false;
   return Boolean(
-    message
-      && message.author?.id === botUserId
-      && message.embeds?.some((embed) => embed.title === RULES_TITLE),
+    message.embeds?.some((embed) => embed.title === RULES_TITLE)
+    || message.components?.some((container) => container.type === 17
+      && container.components?.some((child) => child.type === 10
+        && child.content?.startsWith(`## ${RULES_TITLE}\n`))),
   );
 }
 
@@ -81,11 +87,6 @@ function isRulesHeaderMessage(message, botUserId) {
   );
 }
 
-function loadRulesHeaderBuffer() {
-  const base64 = fs.readFileSync(RULES_HEADER_BASE64_PATH, 'utf8').trim();
-  return Buffer.from(base64, 'base64');
-}
-
 async function ensureRulesGate(guild, botUserId) {
   await guild.channels.fetch();
   const channel = guild.channels.cache.find(
@@ -93,34 +94,40 @@ async function ensureRulesGate(guild, botUserId) {
   );
   if (!channel) throw new Error(`Rules channel ${RULES_CHANNEL_NAME} was not found.`);
 
-  // Remove every previous OTR rules/header post so Discord does not keep a stale
-  // standalone attachment card around. The banner is now attached to the SAME
-  // message as the embed and referenced with attachment://, which renders it as
-  // the visual top section of the gold rules card on desktop and mobile.
   const recent = await channel.messages.fetch({ limit: 50 });
-  const stale = recent.filter(
-    (message) => isRulesGateMessage(message, botUserId) || isRulesHeaderMessage(message, botUserId),
-  );
-
-  for (const message of stale.values()) {
-    await message.delete().catch((error) => {
-      console.warn(`[rules] could not delete stale rules message ${message.id}:`, error.message);
-    });
-  }
-
-  const headerAttachment = new AttachmentBuilder(loadRulesHeaderBuffer(), {
-    name: RULES_HEADER_NAME,
-    description: 'The Trading Foundation',
-  });
-
-  const rulesMessage = await channel.send({
-    embeds: [buildRulesEmbed()],
-    files: [headerAttachment],
+  const existing = recent.find((message) => isRulesGateMessage(message, botUserId));
+  const payload = {
+    content: null,
+    embeds: [],
+    flags: MessageFlags.IsComponentsV2,
+    components: [buildRulesCard()],
+    attachments: [],
+    files: [new AttachmentBuilder(fs.readFileSync(RULES_HEADER_PATH), {
+      name: RULES_HEADER_NAME,
+      description: 'The Trading Foundation',
+    })],
     allowedMentions: { parse: [] },
-  });
+  };
 
+  // Edit in place to preserve the message ID and existing acceptance reactions.
+  // Only remove obsolete header posts after the replacement succeeds.
+  const rulesMessage = existing
+    ? await existing.edit(payload)
+    : await channel.send(payload);
   await rulesMessage.react('✅');
-  console.log(`[rules] posted fresh v5 unified gate in ${channel.name}: rules=${rulesMessage.id}`);
+  const verified = await channel.messages.fetch({ message: rulesMessage.id, force: true });
+  if (!isRulesGateMessage(verified, botUserId)
+    || verified.components[0]?.components[0]?.type !== 12) {
+    throw new Error('Rules card verification failed: expected banner first inside container.');
+  }
+  for (const message of recent.values()) {
+    if (message.id !== rulesMessage.id && isRulesHeaderMessage(message, botUserId)) {
+      await message.delete().catch((error) => {
+        console.warn(`[rules] could not delete stale header ${message.id}:`, error.message);
+      });
+    }
+  }
+  console.log(`[rules] verified v6 banner-first card in ${channel.name}: rules=${rulesMessage.id}; attachments=${verified.attachments.size}`);
   return rulesMessage;
 }
 
