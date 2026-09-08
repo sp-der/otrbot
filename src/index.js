@@ -3,10 +3,12 @@ require('dotenv').config();
 const {
   Client,
   GatewayIntentBits,
+  Partials,
   PermissionFlagsBits,
   SlashCommandBuilder,
 } = require('discord.js');
 const { syncServer } = require('./services/syncServer');
+const { ensureRulesGate, handleRulesReaction } = require('./services/rulesGate');
 
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
@@ -33,8 +35,10 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
 const commands = [
@@ -73,6 +77,12 @@ client.once('ready', async () => {
   } else {
     console.log('Automatic server sync is disabled. Set ENABLE_SERVER_SYNC=true when ready.');
   }
+
+  try {
+    await ensureRulesGate(guild, client.user.id);
+  } catch (error) {
+    console.error('Rules gate setup failed:', error);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -104,13 +114,22 @@ client.on('interactionCreate', async (interaction) => {
 
     try {
       const result = await syncServer(interaction.guild, client.user.id);
+      await ensureRulesGate(interaction.guild, client.user.id);
       await interaction.editReply(
-        `✅ Blueprint synced: ${result.roles} roles, ${result.categories} categories, ${result.channels} channels checked/created.`,
+        `✅ Blueprint synced: ${result.roles} roles, ${result.categories} categories, ${result.channels} channels checked/created. Rules gate refreshed.`,
       );
     } catch (error) {
       console.error('/sync failed:', error);
       await interaction.editReply('❌ Sync failed. Check the Railway logs for the exact Discord permission/API error.');
     }
+  }
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+  try {
+    await handleRulesReaction(reaction, user, client.user.id);
+  } catch (error) {
+    console.error('Rules reaction handling failed:', error);
   }
 });
 

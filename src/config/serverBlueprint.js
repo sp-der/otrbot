@@ -28,6 +28,7 @@ const roles = [
 
 const access = {
   public: [],
+  member: ['member', 'essentials', 'live', 'advanced', 'private'],
   essentials: ['essentials', 'live', 'advanced', 'private'],
   live: ['live', 'advanced', 'private'],
   advanced: ['advanced', 'private'],
@@ -40,7 +41,7 @@ const channels = [
     access: 'public',
     children: [
       ['👋・welcome', 'Welcome to The Trading Foundation. Start here before entering the community.'],
-      ['📜・rules', 'Community rules, trading disclaimer, and member expectations.'],
+      ['📜・rules', 'Read and agree to the server rules to gain access.'],
       ['🧭・getting-started', 'How to use the server, courses, live rooms, and paid access.'],
       ['📢・announcements', 'Official announcements from Dontradez and The Trading Foundation.'],
       ['🎓・choose-your-foundation', 'Compare Foundation Essentials, Live, Advanced, and Private access.'],
@@ -49,7 +50,7 @@ const channels = [
   },
   {
     category: '━━ THE FOUNDATION ━━',
-    access: 'public',
+    access: 'member',
     children: [
       ['💬・community', 'General market and community conversation.'],
       ['👋・introductions', 'Introduce yourself, your experience level, and what you want to improve.'],
@@ -102,7 +103,7 @@ const channels = [
   },
   {
     category: '━━ COMMUNITY ━━',
-    access: 'public',
+    access: 'member',
     children: [
       ['💬・general', 'General community conversation outside the structured trading rooms.'],
       ['🏆・wins', 'Celebrate progress, good process, and community achievements.'],
