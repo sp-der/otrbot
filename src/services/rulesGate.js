@@ -54,19 +54,13 @@ const ruleFields = [
   },
 ];
 
-function buildRulesEmbeds() {
-  const header = new EmbedBuilder()
-    .setColor(GOLD)
-    .setImage(`attachment://${RULES_HEADER_NAME}`);
-
-  const rules = new EmbedBuilder()
+function buildRulesEmbed() {
+  return new EmbedBuilder()
     .setColor(GOLD)
     .setTitle(RULES_TITLE)
     .setDescription('Welcome to The Trading Foundation. Please read the server rules below and react with ✅ to confirm.')
     .addFields(ruleFields)
     .setFooter({ text: 'THE TRADING FOUNDATION • Trade • Learn • Grow • Together' });
-
-  return [header, rules];
 }
 
 function isRulesGateMessage(message, botUserId) {
@@ -77,9 +71,10 @@ function isRulesGateMessage(message, botUserId) {
   );
 }
 
-function isCurrentRulesGate(message, botUserId) {
+function isRulesHeaderMessage(message, botUserId) {
   return Boolean(
-    isRulesGateMessage(message, botUserId)
+    message
+      && message.author?.id === botUserId
       && message.attachments?.some((attachment) => attachment.name === RULES_HEADER_NAME),
   );
 }
@@ -91,35 +86,37 @@ async function ensureRulesGate(guild, botUserId) {
   );
   if (!channel) throw new Error(`Rules channel ${RULES_CHANNEL_NAME} was not found.`);
 
+  // The previous implementation placed the banner inside an otherwise empty embed.
+  // Discord collapses that image-only embed on some desktop/mobile clients, which is
+  // why it showed as a tiny black/gold sliver. Post the banner as a normal image
+  // attachment immediately above the rules embed instead.
   const recent = await channel.messages.fetch({ limit: 50 });
-  const current = recent.find((message) => isCurrentRulesGate(message, botUserId));
+  const stale = recent.filter(
+    (message) => isRulesGateMessage(message, botUserId) || isRulesHeaderMessage(message, botUserId),
+  );
 
-  if (current) {
-    if (!current.reactions.cache.some((reaction) => reaction.emoji.name === '✅' && reaction.me)) {
-      await current.react('✅');
-    }
-    console.log(`[rules] current v2 gate already present in ${channel.name}: ${current.id}`);
-    return current;
-  }
-
-  const stale = recent.filter((message) => isRulesGateMessage(message, botUserId));
   for (const message of stale.values()) {
     await message.delete().catch((error) => {
-      console.warn(`[rules] could not delete stale gate ${message.id}:`, error.message);
+      console.warn(`[rules] could not delete stale rules message ${message.id}:`, error.message);
     });
   }
 
-  const attachment = new AttachmentBuilder(RULES_HEADER_PATH, { name: RULES_HEADER_NAME });
-  const message = await channel.send({
-    content: '',
-    embeds: buildRulesEmbeds(),
-    files: [attachment],
+  const headerAttachment = new AttachmentBuilder(RULES_HEADER_PATH, { name: RULES_HEADER_NAME });
+  const headerMessage = await channel.send({
+    files: [headerAttachment],
     allowedMentions: { parse: [] },
   });
 
-  await message.react('✅');
-  console.log(`[rules] posted fresh v2 gate in ${channel.name}: ${message.id}`);
-  return message;
+  const rulesMessage = await channel.send({
+    embeds: [buildRulesEmbed()],
+    allowedMentions: { parse: [] },
+  });
+
+  await rulesMessage.react('✅');
+  console.log(
+    `[rules] posted fresh v3 gate in ${channel.name}: header=${headerMessage.id} rules=${rulesMessage.id}`,
+  );
+  return rulesMessage;
 }
 
 async function handleRulesReaction(reaction, user, botUserId) {
