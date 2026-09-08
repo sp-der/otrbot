@@ -9,7 +9,7 @@ const RULES_CHANNEL_NAME = '📜・rules';
 const MEMBER_ROLE_NAME = '✅ Member';
 const RULES_TITLE = '📜 SERVER RULES';
 const RULES_HEADER_BASE64_PATH = path.join(__dirname, '../../assets/ttf-rules-header.b64');
-const RULES_HEADER_NAME = 'ttf-rules-header-premium.webp';
+const RULES_HEADER_NAME = 'ttf-rules-header-premium.jpg';
 const GOLD = 0xd4af37;
 
 const ruleFields = [
@@ -58,6 +58,7 @@ const ruleFields = [
 function buildRulesEmbed() {
   return new EmbedBuilder()
     .setColor(GOLD)
+    .setImage(`attachment://${RULES_HEADER_NAME}`)
     .setTitle(RULES_TITLE)
     .setDescription('Welcome to The Trading Foundation. Please read the server rules below and react with ✅ to confirm.')
     .addFields(ruleFields)
@@ -92,6 +93,10 @@ async function ensureRulesGate(guild, botUserId) {
   );
   if (!channel) throw new Error(`Rules channel ${RULES_CHANNEL_NAME} was not found.`);
 
+  // Remove every previous OTR rules/header post so Discord does not keep a stale
+  // standalone attachment card around. The banner is now attached to the SAME
+  // message as the embed and referenced with attachment://, which renders it as
+  // the visual top section of the gold rules card on desktop and mobile.
   const recent = await channel.messages.fetch({ limit: 50 });
   const stale = recent.filter(
     (message) => isRulesGateMessage(message, botUserId) || isRulesHeaderMessage(message, botUserId),
@@ -108,20 +113,14 @@ async function ensureRulesGate(guild, botUserId) {
     description: 'The Trading Foundation',
   });
 
-  const headerMessage = await channel.send({
+  const rulesMessage = await channel.send({
+    embeds: [buildRulesEmbed()],
     files: [headerAttachment],
     allowedMentions: { parse: [] },
   });
 
-  const rulesMessage = await channel.send({
-    embeds: [buildRulesEmbed()],
-    allowedMentions: { parse: [] },
-  });
-
   await rulesMessage.react('✅');
-  console.log(
-    `[rules] posted fresh v4 gate in ${channel.name}: header=${headerMessage.id} rules=${rulesMessage.id}`,
-  );
+  console.log(`[rules] posted fresh v5 unified gate in ${channel.name}: rules=${rulesMessage.id}`);
   return rulesMessage;
 }
 
