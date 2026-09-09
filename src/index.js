@@ -13,7 +13,7 @@ const { ensureRulesGate, handleRulesReaction } = require('./services/rulesGate')
 const { ensureCommunityCards } = require('./services/communityCards');
 const { syncFoundationMember, postMemberActivity } = require('./services/membership');
 
-const { handleSupportInteraction } = require('./services/supportTickets');
+const { handleSupportInteraction, removeSharedCloseControls } = require('./services/supportTickets');
 
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
@@ -48,6 +48,10 @@ const client = new Client({
 
 const commands = [
   new SlashCommandBuilder()
+    .setName('ticket-controls')
+    .setDescription('Show private staff controls for this support ticket.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+  new SlashCommandBuilder()
     .setName('health')
     .setDescription('Check whether OTR Bot is online and connected.'),
   new SlashCommandBuilder()
@@ -72,6 +76,9 @@ client.once('clientReady', async () => {
 
   await guild.commands.set(commands);
   console.log(`Registered slash commands in ${guild.name}.`);
+  try { await removeSharedCloseControls(guild, client.user.id); }
+  catch (error) { console.error('[support] shared-control cleanup failed', error.name, error.code || 'unknown'); }
+
 
   if (syncEnabled) {
     try {
@@ -94,7 +101,8 @@ client.once('clientReady', async () => {
 
 client.on('interactionCreate', async (interaction) => {
   if (interaction.guildId !== guildId) return;
-  if (interaction.isButton() || interaction.isModalSubmit()) {
+  if (interaction.isButton() || interaction.isModalSubmit()
+    || (interaction.isChatInputCommand() && interaction.commandName === 'ticket-controls')) {
     try { await handleSupportInteraction(interaction, client.user.id); }
     catch (error) {
       // Ticket reasons and interaction tokens must never enter application logs.

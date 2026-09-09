@@ -111,3 +111,38 @@ test('failed initial message rolls back the freshly-created ticket', async () =>
   await assert.rejects(createTicket(f.guild,{id:'123',bot:false},'9000','Help'),/send failed/);
   assert.equal(f.guild.channels.cache.size,1);
 });
+
+test('member ticket card has no close button and legacy cleanup preserves other content', () => {
+  const { hasCloseButton, withoutCloseButtons } = require('../src/services/supportTickets');
+  const card = ticketPayload('123','Help').components;
+  assert.equal(hasCloseButton(card),false);
+  const legacy = structuredClone(card);
+  legacy[0].components.push({type:1,components:[{type:2,custom_id:'support:close',label:'Close'}]});
+  assert.equal(hasCloseButton(legacy),true);
+  assert.deepEqual(withoutCloseButtons(legacy),card);
+});
+
+test('staff command shows an ephemeral button, but members receive no controls', async () => {
+  const f=fixture();
+  const {channel}=await createTicket(f.guild,{id:'123',bot:false},'9000','Help');
+  let reply, flags;
+  const interaction={guild:f.guild,channel,user:{id:'123'},commandName:'ticket-controls',
+    isChatInputCommand:()=>true, deferReply:async o=>{flags=o.flags;},editReply:async p=>{reply=p;}};
+  await handleSupportInteraction(interaction,'9000');
+  assert.equal(flags,64);assert.equal(typeof reply,'string');assert.match(reply,/only available/);
+  f.guild.members.fetch=async()=>({id:'2000',roles:{cache:new Collection([[STAFF[1].id,STAFF[1]]])}});
+  interaction.user.id='2000'; await handleSupportInteraction(interaction,'9000');
+  assert.equal(flags,64);assert.equal(reply.components[0].components[0].custom_id,'support:close');
+});
+
+test('existing ticket messages lose shared close controls during startup', async () => {
+  const { removeSharedCloseControls,hasCloseButton }=require('../src/services/supportTickets');
+  const f=fixture();const {channel}=await createTicket(f.guild,{id:'123',bot:false},'9000','Help');
+  const msg={id:'m1',author:{id:'9000'},components:ticketPayload('123','Help').components,
+    edit:async p=>{msg.components=p.components;return msg;}};
+  msg.components[0].components.push({type:1,components:[{type:2,custom_id:'support:close'}]});
+  channel.messages={fetch:async opts=>opts.message?msg:new Collection([['m1',msg]])};
+  await removeSharedCloseControls(f.guild,'9000');
+  assert.equal(hasCloseButton(msg.components),false);
+  assert.equal(msg.components[0].components[0].type,12);
+});

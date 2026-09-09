@@ -52,7 +52,6 @@ function ticketPayload(ownerId, reason) {
   const definition = { id: 105, title: 'YOUR SUPPORT TICKET', body: [
     { type: 10, content: `<@${ownerId}>, your ticket is now open. Don and the support team will respond shortly.` },
     { type: 10, content: `**Reason for your ticket**\n${escapeMarkdown(reason)}` },
-    { type: 1, components: [{ type: 2, style: 2, custom_id: 'support:close', label: 'Close Ticket (Staff)', emoji: { name: '🔒' } }] },
   ] };
   return { flags: MessageFlags.IsComponentsV2, components: [buildCard(definition)],
     files: [new AttachmentBuilder(path.join(__dirname, '../../assets', HEADER), { name: HEADER })],
@@ -120,8 +119,62 @@ async function closeTicket(interaction, botId) {
   await interaction.editReply('Ticket closed. The conversation has been preserved.');
   console.log(`[support] closed ticket channel=${channel.id}`);
 }
+function withoutCloseButtons(components) {
+  return components.flatMap(component => {
+    const copy = component.toJSON ? component.toJSON() : { ...component };
+    if (copy.custom_id === 'support:close') return [];
+    if (copy.components) copy.components = withoutCloseButtons(copy.components);
+    if (copy.type === 1 && !copy.components.length) return [];
+    return [copy];
+  });
+}
+function hasCloseButton(components) {
+  return components.some(c => (c.customId || c.custom_id) === 'support:close'
+    || (c.components && hasCloseButton(c.components)));
+}
+async function removeSharedCloseControls(guild, botId) {
+  await guild.channels.fetch();
+  let updated = 0, checked = 0;
+  for (const channel of guild.channels.cache.values()) {
+    if (!ticketState(channel) || channel.parent?.name !== CATEGORY) continue;
+    checked++;
+    let before;
+    while (true) {
+      const page = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+      for (const message of page.values()) {
+        if (message.author?.id !== botId || !hasCloseButton(message.components || [])) continue;
+        await message.edit({ components: withoutCloseButtons(message.components) });
+        const verified = await channel.messages.fetch({ message: message.id, force: true });
+        if (hasCloseButton(verified.components || [])) throw new Error('Shared close button still present');
+        updated++;
+      }
+      if (page.size < 100) break;
+      before = page.lastKey();
+    }
+  }
+  console.log(`[support] verified staff-only close controls; tickets=${checked}; shared messages updated=${updated}`);
+}
+
 async function handleSupportInteraction(interaction, botId) {
   if (!interaction.guild) return false;
+  if (interaction.isChatInputCommand?.() && interaction.commandName === 'ticket-controls') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
+    if (!member.roles.cache.some(r => STAFF_NAMES.includes(r.name)) && interaction.guild.ownerId !== member.id) {
+      await interaction.editReply('Ticket controls are only available to Don, Admin, and Moderators.'); return true;
+    }
+    const state = ticketState(interaction.channel);
+    if (!state || interaction.channel.parent?.name !== CATEGORY) {
+      await interaction.editReply('Use this command inside a support ticket.'); return true;
+    }
+    if (state.status === 'closed') {
+      await interaction.editReply('This ticket is already closed.'); return true;
+    }
+    await interaction.editReply({ content: 'Staff ticket controls — only you can see this panel.',
+      components: [{ type: 1, components: [{ type: 2, style: 2, custom_id: 'support:close', label: 'Close Ticket', emoji: { name: '🔒' } }] }],
+      allowedMentions: { parse: [] } });
+    return true;
+  }
   if (interaction.isButton() && interaction.customId === 'support:open') {
     if (interaction.channel?.name !== PANEL || interaction.message?.author?.id !== botId) return false;
     await interaction.showModal(reasonModal());
@@ -150,4 +203,4 @@ async function handleSupportInteraction(interaction, botId) {
   return false;
 }
 module.exports = { ticketState, ticketOverwrites, validateOverwrites, ticketPayload, reasonModal,
-  createTicket, closeTicket, handleSupportInteraction };
+  createTicket, closeTicket, handleSupportInteraction, withoutCloseButtons, hasCloseButton, removeSharedCloseControls };
