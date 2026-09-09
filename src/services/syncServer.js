@@ -101,6 +101,39 @@ async function rebuildOldChannels(guild, cutoff) {
   console.log(`[rebuild] removed ${old.length} original channels/categories`);
 }
 
+async function ensureTopChannels(guild, botId, map, records) {
+  const topRecords = [];
+  for (const [position, item] of (blueprint.topChannels || []).entries()) {
+    const definition = item.definition;
+    const options = { name: definition.name, type: definition.type, parent: null,
+      permissionOverwrites: buildOverwrites(guild, botId, item.access, map, definition.mode), reason: REASON };
+    if (definition.type === ChannelType.GuildText) options.topic = definition.topic || null;
+    let channel = guild.channels.cache.find(c => c.name === definition.name && c.type === definition.type)
+      || guild.channels.cache.find(c => definition.aliases?.includes(c.name) && c.type === definition.type);
+    channel = channel ? await channel.edit(options) : await guild.channels.create(options);
+    await channel.setPosition(position);
+    const record = { id: channel.id, group: item, definition, parentId: null };
+    records.push(record);
+    topRecords.push(record);
+    console.log(`[sync] ready top/${item.access}/${definition.mode || 'chat'} ${channel.id} ${channel.name}`);
+  }
+
+  // This category existed only because a previous blueprint managed member activity as a category.
+  // Once its channel has been moved back to the top level, remove the empty legacy category permanently.
+  await guild.channels.fetch();
+  const legacy = guild.channels.cache.find(c => c.name === '━━ MEMBER ACTIVITY ━━' && c.type === ChannelType.GuildCategory);
+  if (legacy) {
+    const children = guild.channels.cache.filter(c => c.parentId === legacy.id);
+    if (children.size === 0) {
+      await legacy.delete('Member activity is intentionally uncategorized above START HERE');
+      console.log('[sync] removed obsolete MEMBER ACTIVITY category');
+    } else {
+      console.warn(`[sync] kept obsolete MEMBER ACTIVITY category because it still has ${children.size} child channel(s)`);
+    }
+  }
+  return topRecords;
+}
+
 async function verify(guild, botId, map, records, cutoff) {
   await guild.channels.fetch();
   await guild.roles.fetch();
@@ -134,7 +167,19 @@ async function verify(guild, botId, map, records, cutoff) {
     const actual = guild.roles.cache.get(role.id);
     if (actual.permissions.bitfield !== new PermissionsBitField(rolePermissions(key)).bitfield) throw new Error(`Role mismatch: ${key}`);
   }
-  console.log('[verify] all channel overwrites, tier/rank visibility, posting, voice and role permissions passed');
+
+  const firstCategory = guild.channels.cache.find(c => c.name === blueprint.channels[0]?.category && c.type === ChannelType.GuildCategory);
+  for (const item of blueprint.topChannels || []) {
+    const channel = guild.channels.cache.find(c => c.name === item.definition.name && c.type === item.definition.type);
+    if (!channel || channel.parentId !== null) throw new Error(`Top-level channel placement failed: ${item.definition.name}`);
+    if (firstCategory && channel.rawPosition >= firstCategory.rawPosition) {
+      throw new Error(`Top-level channel is not above START HERE: ${item.definition.name}`);
+    }
+  }
+  if (guild.channels.cache.some(c => c.name === '━━ MEMBER ACTIVITY ━━' && c.type === ChannelType.GuildCategory)) {
+    throw new Error('Obsolete MEMBER ACTIVITY category still exists.');
+  }
+  console.log('[verify] all channel overwrites, tier/rank visibility, posting, voice, role permissions and top-level placement passed');
 }
 
 async function syncServer(guild, botId, { rebuildBefore } = {}) {
@@ -145,6 +190,7 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
     const map = await ensureRoles(guild);
     await rebuildOldChannels(guild, rebuildBefore);
     const records = [];
+    const topRecords = await ensureTopChannels(guild, botId, map, records);
     for (const [index, group] of blueprint.channels.entries()) {
       const categoryMode = group.access === 'public' && index === 0 ? 'readonly' : 'chat';
       const categoryOptions = { name: group.category, type: ChannelType.GuildCategory,
@@ -152,7 +198,7 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
       let category = guild.channels.cache.find(c => c.name === group.category && c.type === ChannelType.GuildCategory)
         || guild.channels.cache.find(c => group.aliases?.includes(c.name) && c.type === ChannelType.GuildCategory);
       category = category ? await category.edit(categoryOptions) : await guild.channels.create(categoryOptions);
-      await category.setPosition(index);
+      await category.setPosition(index + topRecords.length);
       records.push({ id: category.id, group, definition: { name: group.category, type: ChannelType.GuildCategory, mode: categoryMode }, parentId: null });
       for (const [position, definition] of group.children.entries()) {
         const options = { name: definition.name, type: definition.type, parent: category.id,
@@ -166,6 +212,13 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
         console.log(`[sync] ready ${group.access}/${definition.mode || 'chat'} ${channel.id} ${channel.name}`);
       }
     }
+
+    // Category/channel edits can alter global positions, so pin the top-level channels one final time.
+    for (const [position, record] of topRecords.entries()) {
+      const channel = guild.channels.cache.get(record.id) || await guild.channels.fetch(record.id);
+      await channel.setPosition(position);
+    }
+
     await verify(guild, botId, map, records, rebuildBefore);
     // Merge the obsolete Live tier into Premium only after all new permissions pass.
     const legacyLive = guild.roles.cache.find(r => r.name === '🥈 Foundation Live');
@@ -185,7 +238,7 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
     await syncAllFoundationMembers(guild);
 
     const result = { roles: blueprint.roles.length, categories: blueprint.channels.length,
-      channels: blueprint.channels.reduce((n, g) => n + g.children.length, 0) };
+      channels: (blueprint.topChannels || []).length + blueprint.channels.reduce((n, g) => n + g.children.length, 0) };
     console.log('[sync] VERIFIED COMPLETE ' + JSON.stringify(result));
     return result;
   } finally { running = false; }
