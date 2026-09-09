@@ -10,6 +10,7 @@ const ROLE_BY_TIER = {
   premium: '🥇 Premium',
   personal: '👑 Personal Guide',
 };
+const RECONCILE_INTERVAL_MS = 15 * 60 * 1000;
 
 function tierFromProduct(productId, title) {
   const explicit = {
@@ -30,16 +31,25 @@ class WhopManager {
     this.client = client;
     this.guildId = guildId;
     this.store = store || new WhopStore();
+    this.ready = this.store.init();
     this.products = [];
     this.lastSync = null;
     this.lastSyncResult = null;
+    this.timer = null;
   }
 
   async init() {
-    await this.store.init();
+    await this.ready;
+    console.log('[whop] membership database ready');
     try { await this.refreshProducts(); }
     catch (error) { console.error('[whop] product discovery failed', error.code || error.name); }
-    console.log('[whop] membership database ready');
+    try { await this.syncAll(); }
+    catch (error) { console.error('[whop] startup membership sync failed', error.code || error.name); }
+    if (!this.timer) {
+      this.timer = setInterval(() => this.syncAll().catch(error => console.error('[whop] scheduled membership sync failed', error.code || error.name)), RECONCILE_INTERVAL_MS);
+      this.timer.unref();
+      console.log('[whop] self-healing membership sync scheduled every 15 minutes');
+    }
   }
 
   async refreshProducts() {
@@ -53,6 +63,7 @@ class WhopManager {
   }
 
   async acceptEvent(event) {
+    await this.ready;
     const isNew = await this.store.claimEvent(event);
     if (!isNew) return { duplicate: true };
     if (String(event?.type || '').startsWith('membership.') && event?.data?.id && event?.data?.user?.id) {
@@ -116,6 +127,7 @@ class WhopManager {
   }
 
   async syncAll() {
+    await this.ready;
     const memberships = await listMemberships();
     const users = new Set();
     for (const membership of memberships) {
@@ -139,6 +151,7 @@ class WhopManager {
   }
 
   async status() {
+    await this.ready;
     const counts = await this.store.counts();
     return {
       apiConfigured: Boolean(process.env.WHOP_COMPANY_API_KEY && process.env.WHOP_COMPANY_ID),
