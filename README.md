@@ -29,3 +29,9 @@ Keep `DISCORD_TOKEN` in Railway. Configure `DISCORD_GUILD_ID` and `ENABLE_SERVER
 ## FAQ research
 
 The initial FAQ uses original answers based on the approved offering. Question topics (beginner experience, included access, cost and class scheduling) were informed by [618ers' public community FAQ](https://whop.com/618/618ers/) reviewed September 9, 2026. No competitor policies, trading outcomes, course content or pricing were copied.
+
+## Private support tickets
+
+The read-only Support channel contains a branded Open a Ticket button. Clicking it opens a private reason form. Submission creates a private text channel under Support Tickets and returns an ephemeral link. Access is explicitly limited to the requesting member, Dontradez, Admin, Moderator and OTR Bot; unrelated paid/community roles are not granted visibility. As with all Discord channels, the server owner and roles with Administrator retain Discord's administrative access.
+
+One open ticket per member is enforced with a request lock and channel-topic metadata, so active tickets survive bot restarts. Reasons are posted only after validating the new channel's exact permission overwrites and are not logged. Staff can close a ticket without deleting its conversation; the member retains read-only access and can open a new ticket afterward. Template sync leaves individual ticket channels alone.

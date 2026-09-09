@@ -28,6 +28,7 @@ const roles = [
 
 const access = {
   public: [],
+  staff: [],
   member: ['member'],
   foundation: ['foundationMember', 'essential', 'premium', 'personal'],
   essential: ['essential', 'premium', 'personal'],
@@ -93,9 +94,10 @@ const channels = [
     voice('🔊 Live Classroom', 'listen', ['🔊 Live Trading']),
   ] },
   { category: '━━ SUPPORT ━━', access: 'public', children: [
-    text('🎫・support', 'Ask for help with Discord, course access, or Whop. Never post private payment details.'),
+    text('🎫・support', 'Open a private support ticket using the button below.', 'readonly'),
     text('💡・suggestions', 'Ideas and feedback for The Trading Foundation.'),
   ] },
+  { category: '━━ SUPPORT TICKETS ━━', access: 'staff', children: [] },
 ];
 
 module.exports = { roles, access, channels,

@@ -13,6 +13,8 @@ const { ensureRulesGate, handleRulesReaction } = require('./services/rulesGate')
 const { ensureCommunityCards } = require('./services/communityCards');
 const { syncFoundationMember, postMemberActivity } = require('./services/membership');
 
+const { handleSupportInteraction } = require('./services/supportTickets');
+
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
 const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'true';
@@ -91,7 +93,19 @@ client.once('clientReady', async () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand() || interaction.guildId !== guildId) return;
+  if (interaction.guildId !== guildId) return;
+  if (interaction.isButton() || interaction.isModalSubmit()) {
+    try { await handleSupportInteraction(interaction, client.user.id); }
+    catch (error) {
+      // Ticket reasons and interaction tokens must never enter application logs.
+      console.error('[support] interaction failed', error.name, error.code || 'unknown');
+      const response = { content: 'We could not finish that request. Please try again shortly.', allowedMentions: { parse: [] } };
+      if (interaction.deferred || interaction.replied) await interaction.editReply(response).catch(() => {});
+      else await interaction.reply({ ...response, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
+  if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === 'health') {
     await interaction.reply({

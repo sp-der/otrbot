@@ -29,7 +29,7 @@ test('branded cards fit Discord limits, have the header first, and welcome links
 test('repeated card publishing edits existing messages without duplicate posts', async () => {
   let sends = 0, edits = 0;
   const channels = new Collection();
-  for (const name of ['📜・rules', '👋・welcome', '🎓・choose-your-foundation', '❓・faq']) {
+  for (const name of ['📜・rules', '👋・welcome', '🎓・choose-your-foundation', '❓・faq', '🎫・support']) {
     const messages = new Collection();
     const channel = { name, id: String(channels.size + 1), isTextBased: () => true,
       messages: { fetch: async opts => opts.message ? messages.get(opts.message) : messages },
@@ -44,7 +44,7 @@ test('repeated card publishing edits existing messages without duplicate posts',
   const guild = { id: 'guild', channels: { fetch: async () => {}, cache: channels } };
   await ensureCommunityCards(guild, 'bot');
   await ensureCommunityCards(guild, 'bot');
-  assert.equal(sends, 3); assert.equal(edits, 3);
+  assert.equal(sends, 4); assert.equal(edits, 4);
 });
 
 test('Foundation membership follows tier grants, downgrades, and last-tier removal', async () => {

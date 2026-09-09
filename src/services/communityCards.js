@@ -24,6 +24,10 @@ function definitions(guild) {
       section('PERSONAL GUIDE • $150', 'Everything in Premium, plus:\n• A one-month live course with Don\n• Live teaching and questions\n• Daily trade reviews during the course, around 1–2 selected trades per day across the group\n• Private classroom, course questions, and trade-submission channels'),
       text('Whop enrollment is coming soon. Premium and Personal Guide billing terms, course dates, and upgrade details will be confirmed before enrollment opens.'),
     ] },
+    { id: 104, channel: '🎫・support', title: 'THE FOUNDATION SUPPORT', body: [
+      text('Need a hand? Open a private ticket and tell us how we can help. Don and the support team will respond shortly.'),
+      { type: 1, components: [{ type: 2, style: 1, custom_id: 'support:open', label: 'Open a Ticket', emoji: { name: '🎫' } }] },
+    ] },
     { id: 103, channel: '❓・faq', title: 'FREQUENTLY ASKED QUESTIONS', body: [
       section('Do I need trading experience?', 'No. Essential is built around learning the basics and developing a foundation before risking real money.'),
       section('Can I join the community for free?', 'Yes. Accept the rules to receive Community Member and unlock the free Community section. Paid courses and Foundation rooms require a package.'),
