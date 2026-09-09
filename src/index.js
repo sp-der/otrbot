@@ -240,10 +240,14 @@ function whopSyncEvent(postId, type = 'forum.announcement.sync') {
 
 async function mirrorAnnouncementToWhop(message) {
   if (!message || message.guildId !== guildId || message.author?.bot) return;
-  const isAnnouncementChannel = discordAnnouncementsChannelId
-    ? message.channelId === discordAnnouncementsChannelId
-    : message.channel?.name === discordAnnouncementsChannelName;
+  const matchesAnnouncementId = Boolean(discordAnnouncementsChannelId)
+    && message.channelId === discordAnnouncementsChannelId;
+  const matchesAnnouncementName = message.channel?.name === discordAnnouncementsChannelName;
+  const isAnnouncementChannel = matchesAnnouncementId || matchesAnnouncementName;
   if (!isAnnouncementChannel) return;
+  if (discordAnnouncementsChannelId && !matchesAnnouncementId && matchesAnnouncementName) {
+    console.warn(`[whop] announcements channel ID ${discordAnnouncementsChannelId} is stale; matched current channel ${message.channelId} by name`);
+  }
 
   const content = announcementMarkdown(message);
   if (!content) return;
