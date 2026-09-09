@@ -3,7 +3,7 @@ const {AttachmentBuilder,MessageFlags,escapeMarkdown}=require('discord.js');
 const {buildCard}=require('./communityCards');
 async function postOnboarding(member,joined){
  if(member.user.bot)return;
- const guild=member.guild,channel=guild.channels.cache.find(c=>c.name===(joined?'👋・welcome':'👥・member-activity'));
+ const guild=member.guild,channel=guild.channels.cache.find(c=>c.name==='👥・member-activity');
  if(!channel)return;
  const rules=guild.channels.cache.find(c=>c.name==='📜・rules');
  const tiers=member.roles.cache.filter(r=>['🥉 Essential','🥇 Premium','👑 Personal Guide'].includes(r.name)).map(r=>r.name);
