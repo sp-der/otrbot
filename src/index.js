@@ -15,6 +15,10 @@ const { syncFoundationMember, postMemberActivity } = require('./services/members
 
 const { handleSupportInteraction, removeSharedCloseControls } = require('./services/supportTickets');
 
+const { Activity } = require('./services/activity');
+const { postOnboarding, paidWelcome } = require('./services/onboarding');
+let activity;
+
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
 const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'true';
@@ -39,6 +43,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
@@ -47,6 +52,11 @@ const client = new Client({
 });
 
 const commands = [
+  new SlashCommandBuilder().setName('rank').setDescription('View your Trading Foundation XP and rank.')
+    .addUserOption(o=>o.setName('member').setDescription('Member to view')),
+  new SlashCommandBuilder().setName('leaderboard').setDescription('View the Foundation activity leaderboard.')
+    .addStringOption(o=>o.setName('view').setDescription('Activity type').addChoices(
+      {name:'Combined XP',value:'combined'},{name:'Message XP',value:'text'},{name:'Voice time',value:'voice'})),
   new SlashCommandBuilder()
     .setName('ticket-controls')
     .setDescription('Show private staff controls for this support ticket.')
@@ -94,6 +104,10 @@ client.once('clientReady', async () => {
   try {
     await ensureRulesGate(guild, client.user.id);
     await ensureCommunityCards(guild, client.user.id);
+    if(process.env.DATABASE_URL){
+      activity=new Activity(client,guild);
+      try{await activity.init();}catch(error){console.error('[xp] initialization failed',error.code||error.name);activity=null;}
+    }else console.warn('[xp] DATABASE_URL missing; XP disabled until persistent database is connected');
   } catch (error) {
     console.error('Rules gate setup failed:', error);
   }
@@ -115,6 +129,11 @@ client.on('interactionCreate', async (interaction) => {
   }
   if (!interaction.isChatInputCommand()) return;
 
+  if (['rank','leaderboard'].includes(interaction.commandName)) {
+    if(!activity){await interaction.reply({content:'The activity system is not available yet. Please try again shortly.',ephemeral:true});return;}
+    try{await activity.command(interaction);}catch(error){console.error('[xp] command failed',error.code||error.name);if(interaction.deferred)await interaction.editReply('Unable to load activity right now. Please try again.').catch(()=>{});}
+    return;
+  }
   if (interaction.commandName === 'health') {
     await interaction.reply({
       content: `🐅 OTR Bot is online. Guild: ${interaction.guild?.name || guildId}. Sync: ${syncEnabled ? 'enabled' : 'disabled'}.`,
@@ -164,16 +183,21 @@ client.on('messageReactionAdd', async (reaction, user) => {
 client.on('guildMemberUpdate', async (before, member) => {
   if (member.guild.id !== guildId) return;
   if (before.roles.cache.equals(member.roles.cache)) return;
-  try { await syncFoundationMember(member); }
+  try { await syncFoundationMember(member); if(activity)await activity.onMember(member); await paidWelcome(before,member); }
   catch (error) { console.error('Foundation role update failed:', error); }
 });
 for (const [event, joined] of [['guildMemberAdd', true], ['guildMemberRemove', false]]) {
   client.on(event, async member => {
     if (member.guild.id !== guildId) return;
-    try { await postMemberActivity(member, joined); }
+    try { await postOnboarding(member, joined); if(activity)await activity.store.record(member,false,!joined); }
     catch (error) { console.error('Member activity post failed:', error); }
   });
 }
+
+client.on('messageCreate', message=>{if(activity)activity.onMessage(message).catch(e=>console.error('[xp] message failed',e.code||e.name));});
+client.on('voiceStateUpdate', (oldState,state)=>{if(activity&&state.guild.id===guildId)activity.tick().catch(e=>console.error('[xp] voice update failed',e.code||e.name));});
+client.on('shardDisconnect',()=>{if(activity)activity.voice.clear();});
+client.on('shardResume',()=>{if(activity)activity.tick().catch(()=>{});});
 
 client.on('error', (error) => console.error('Discord client error:', error));
 process.on('unhandledRejection', (error) => console.error('Unhandled rejection:', error));
