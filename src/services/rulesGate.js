@@ -6,7 +6,7 @@ const {
 } = require('discord.js');
 
 const RULES_CHANNEL_NAME = '📜・rules';
-const MEMBER_ROLE_NAME = '✅ Member';
+const MEMBER_ROLE_NAME = '✅ Community Member';
 const RULES_TITLE = '📜 SERVER RULES';
 const RULES_HEADER_PATH = path.join(__dirname, '../../assets/ttf-rules-header.png');
 const RULES_HEADER_NAME = 'ttf-rules-header.png';
@@ -51,7 +51,7 @@ const ruleFields = [
   },
   {
     name: '✅ AGREE TO THE RULES',
-    value: 'React with ✅ below to confirm you have read and agree to the server rules. Once accepted, OTR Bot will give you the ✅ Member role and unlock the rest of The Trading Foundation.',
+    value: 'React with ✅ below to confirm you have read and agree to the server rules. Once accepted, OTR Bot will give you the ✅ Community Member role and unlock the free Community section. Paid course and Foundation access depend on your package.',
   },
 ];
 

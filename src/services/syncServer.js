@@ -1,7 +1,7 @@
 const { ChannelType, PermissionFlagsBits: P, PermissionsBitField } = require('discord.js');
 const blueprint = require('../config/serverBlueprint');
 const STAFF = ['dontradez', 'admin', 'moderator'];
-const REASON = 'Owner-requested Trading Foundation channel rebuild';
+const REASON = 'Owner-requested three-tier Trading Foundation redesign';
 const READ = [P.ViewChannel, P.ReadMessageHistory, P.AddReactions, P.UseApplicationCommands];
 const WRITE = [P.SendMessages, P.AttachFiles, P.EmbedLinks, P.CreatePublicThreads, P.SendMessagesInThreads];
 const NO_WRITE = [P.SendMessages, P.SendMessagesInThreads, P.CreatePublicThreads, P.CreatePrivateThreads, P.SendVoiceMessages, P.UseExternalApps];
@@ -35,6 +35,11 @@ function buildOverwrites(guild, botId, access, roles, mode = 'chat') {
   return overwrites;
 }
 
+function findRole(guild, definition) {
+  return guild.roles.cache.find(r => r.name === definition.name)
+    || guild.roles.cache.find(r => definition.aliases?.includes(r.name));
+}
+
 async function preflight(guild) {
   await guild.roles.fetch();
   await guild.channels.fetch();
@@ -44,7 +49,7 @@ async function preflight(guild) {
     if (!me.permissions.has(permission)) throw new Error('Bot requires Manage Channels and Manage Roles.');
   }
   for (const definition of blueprint.roles) {
-    const existing = guild.roles.cache.find(r => r.name === definition.name);
+    const existing = findRole(guild, definition);
     if (existing && !existing.editable) throw new Error(`Move OTR Bot above ${definition.name} before syncing.`);
     if (!me.permissions.has(rolePermissions(definition.key))) throw new Error(`Bot cannot grant required permissions for ${definition.name}.`);
   }
@@ -53,7 +58,7 @@ async function preflight(guild) {
 async function ensureRoles(guild) {
   const map = new Map();
   for (const definition of blueprint.roles) {
-    let role = guild.roles.cache.find(r => r.name === definition.name);
+    let role = findRole(guild, definition);
     const options = { name: definition.name, color: definition.color, hoist: definition.hoist,
       mentionable: false, permissions: rolePermissions(definition.key), reason: REASON };
     role = role ? await role.edit(options) : await guild.roles.create(options);
@@ -144,7 +149,8 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
       const categoryMode = group.access === 'public' && index === 0 ? 'readonly' : 'chat';
       const categoryOptions = { name: group.category, type: ChannelType.GuildCategory,
         permissionOverwrites: buildOverwrites(guild, botId, group.access, map, categoryMode), reason: REASON };
-      let category = guild.channels.cache.find(c => c.name === group.category && c.type === ChannelType.GuildCategory);
+      let category = guild.channels.cache.find(c => c.name === group.category && c.type === ChannelType.GuildCategory)
+        || guild.channels.cache.find(c => group.aliases?.includes(c.name) && c.type === ChannelType.GuildCategory);
       category = category ? await category.edit(categoryOptions) : await guild.channels.create(categoryOptions);
       await category.setPosition(index);
       records.push({ id: category.id, group, definition: { name: group.category, type: ChannelType.GuildCategory, mode: categoryMode }, parentId: null });
@@ -152,7 +158,8 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
         const options = { name: definition.name, type: definition.type, parent: category.id,
           permissionOverwrites: buildOverwrites(guild, botId, group.access, map, definition.mode), reason: REASON };
         if (definition.type === ChannelType.GuildText) options.topic = definition.topic || null;
-        let channel = guild.channels.cache.find(c => c.name === definition.name && c.parentId === category.id && c.type === definition.type);
+        let channel = guild.channels.cache.find(c => c.name === definition.name && c.type === definition.type)
+          || guild.channels.cache.find(c => definition.aliases?.includes(c.name) && c.type === definition.type);
         channel = channel ? await channel.edit(options) : await guild.channels.create(options);
         await channel.setPosition(position);
         records.push({ id: channel.id, group, definition, parentId: category.id });
@@ -160,6 +167,22 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
       }
     }
     await verify(guild, botId, map, records, rebuildBefore);
+    // Merge the obsolete Live tier into Premium only after all new permissions pass.
+    const legacyLive = guild.roles.cache.find(r => r.name === '🥈 Foundation Live');
+    if (legacyLive) {
+      await guild.members.fetch();
+      for (const member of legacyLive.members.values()) {
+        await member.roles.add(map.get('premium'), REASON);
+      }
+      await legacyLive.delete(REASON);
+      console.log('[roles] merged obsolete Foundation Live into Premium');
+    }
+    const obsolete = guild.channels.cache.find(c => c.name === '🧭・getting-started'
+      && c.parent?.name === '━━ START HERE ━━');
+    if (obsolete) await obsolete.delete(REASON);
+    const { syncAllFoundationMembers } = require('./membership');
+    await syncAllFoundationMembers(guild);
+
     const result = { roles: blueprint.roles.length, categories: blueprint.channels.length,
       channels: blueprint.channels.reduce((n, g) => n + g.children.length, 0) };
     console.log('[sync] VERIFIED COMPLETE ' + JSON.stringify(result));

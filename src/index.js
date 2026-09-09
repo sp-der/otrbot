@@ -10,6 +10,9 @@ const {
 const { syncServer } = require('./services/syncServer');
 const { ensureRulesGate, handleRulesReaction } = require('./services/rulesGate');
 
+const { ensureCommunityCards } = require('./services/communityCards');
+const { syncFoundationMember, postMemberActivity } = require('./services/membership');
+
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
 const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'true';
@@ -56,7 +59,7 @@ function canManage(interaction) {
   return Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
 }
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`OTR Bot online as ${client.user.tag}`);
 
   const guild = await client.guilds.fetch(guildId).catch(() => null);
@@ -73,6 +76,7 @@ client.once('ready', async () => {
       await syncServer(guild, client.user.id, { rebuildBefore: process.env.DISCORD_REBUILD_BEFORE });
     } catch (error) {
       console.error('Startup server sync failed:', error);
+      return;
     }
   } else {
     console.log('Automatic server sync is disabled. Set ENABLE_SERVER_SYNC=true when ready.');
@@ -80,6 +84,7 @@ client.once('ready', async () => {
 
   try {
     await ensureRulesGate(guild, client.user.id);
+    await ensureCommunityCards(guild, client.user.id);
   } catch (error) {
     console.error('Rules gate setup failed:', error);
   }
@@ -115,6 +120,7 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const result = await syncServer(interaction.guild, client.user.id);
       await ensureRulesGate(interaction.guild, client.user.id);
+      await ensureCommunityCards(interaction.guild, client.user.id);
       await interaction.editReply(
         `✅ Blueprint synced: ${result.roles} roles, ${result.categories} categories, ${result.channels} channels checked/created. Rules gate refreshed.`,
       );
@@ -132,6 +138,20 @@ client.on('messageReactionAdd', async (reaction, user) => {
     console.error('Rules reaction handling failed:', error);
   }
 });
+
+client.on('guildMemberUpdate', async (before, member) => {
+  if (member.guild.id !== guildId) return;
+  if (before.roles.cache.equals(member.roles.cache)) return;
+  try { await syncFoundationMember(member); }
+  catch (error) { console.error('Foundation role update failed:', error); }
+});
+for (const [event, joined] of [['guildMemberAdd', true], ['guildMemberRemove', false]]) {
+  client.on(event, async member => {
+    if (member.guild.id !== guildId) return;
+    try { await postMemberActivity(member, joined); }
+    catch (error) { console.error('Member activity post failed:', error); }
+  });
+}
 
 client.on('error', (error) => console.error('Discord client error:', error));
 process.on('unhandledRejection', (error) => console.error('Unhandled rejection:', error));

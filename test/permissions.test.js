@@ -15,11 +15,11 @@ function effective(overwrites, keys) {
   return new PermissionsBitField((value & ~deny) | allow);
 }
 test('every combination of paid tiers and activity ranks respects visibility and posting rules', () => {
-  const paid = ['essentials', 'live', 'advanced', 'private'];
+  const paid = ['essential', 'premium', 'personal'];
   const ranks = blueprint.roles.map(r => r.key).filter(k => !paid.includes(k) && !['dontradez','admin','moderator'].includes(k));
   for (const group of blueprint.channels) for (const channel of group.children) {
     const overwrites = buildOverwrites({ id: 'guild' }, 'bot', group.access, roles, channel.mode);
-    for (let mask = 0; mask < 16; mask++) for (const rank of ranks) {
+    for (let mask = 0; mask < 8; mask++) for (const rank of ranks) {
       const keys = [...paid.filter((_, i) => mask & (1 << i)), rank];
       const p = effective(overwrites, keys);
       const visible = group.access === 'public' || keys.some(k => blueprint.access[group.access].includes(k));

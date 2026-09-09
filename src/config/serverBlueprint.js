@@ -12,11 +12,11 @@ const roles = [
   { key: 'dontradez', name: '👑 Dontradez', color: COLORS.gold, hoist: true },
   { key: 'admin', name: '🛡️ Admin', color: COLORS.champagne, hoist: true },
   { key: 'moderator', name: '🔨 Moderator', color: COLORS.silver, hoist: true },
-  { key: 'private', name: '👑 Foundation Private', color: COLORS.gold, hoist: true },
-  { key: 'advanced', name: '🥇 Foundation Advanced', color: COLORS.champagne, hoist: true },
-  { key: 'live', name: '🥈 Foundation Live', color: COLORS.silver, hoist: true },
-  { key: 'essentials', name: '🥉 Foundation Essentials', color: COLORS.green, hoist: true },
-  { key: 'member', name: '✅ Member', color: COLORS.navy, hoist: false },
+  { key: 'personal', name: '👑 Personal Guide', aliases: ['👑 Foundation Private'], color: COLORS.gold, hoist: true },
+  { key: 'premium', name: '🥇 Premium', aliases: ['🥇 Foundation Advanced'], color: COLORS.champagne, hoist: true },
+  { key: 'essential', name: '🥉 Essential', aliases: ['🥉 Foundation Essentials'], color: COLORS.green, hoist: true },
+  { key: 'foundationMember', name: '🎟️ Foundation Member', color: COLORS.silver, hoist: false },
+  { key: 'member', name: '✅ Community Member', aliases: ['✅ Member'], color: COLORS.navy, hoist: false },
   { key: 'elite', name: '🐅 Foundation Elite', color: COLORS.gold, hoist: false },
   { key: 'veteran', name: '🏆 Foundation Veteran', color: COLORS.gold, hoist: false },
   { key: 'foundation', name: '🎓 Foundation Trader', color: COLORS.champagne, hoist: false },
@@ -28,129 +28,76 @@ const roles = [
 
 const access = {
   public: [],
-  member: ['member', 'essentials', 'live', 'advanced', 'private'],
-  essentials: ['essentials', 'live', 'advanced', 'private'],
-  live: ['live', 'advanced', 'private'],
-  advanced: ['advanced', 'private'],
-  private: ['private'],
+  member: ['member'],
+  foundation: ['foundationMember', 'essential', 'premium', 'personal'],
+  essential: ['essential', 'premium', 'personal'],
+  premium: ['premium', 'personal'],
+  personal: ['personal'],
 };
 
+const text = (name, topic, mode = 'chat', aliases = []) => ({ name, topic, mode, aliases, type: ChannelType.GuildText });
+const voice = (name, mode = 'chat', aliases = []) => ({ name, mode, aliases, type: ChannelType.GuildVoice });
 const channels = [
-  {
-    category: '━━ START HERE ━━',
-    access: 'public',
-    children: [
-      ['👋・welcome', 'Welcome to The Trading Foundation. Start here before entering the community.'],
-      ['📜・rules', 'Read and agree to the server rules to gain access.'],
-      ['🧭・getting-started', 'How to use the server, courses, live rooms, and paid access.'],
-      ['📢・announcements', 'Official announcements from Dontradez and The Trading Foundation.'],
-      ['🎓・choose-your-foundation', 'Compare Foundation Essentials, Live, Advanced, and Private access.'],
-      ['❓・faq', 'Frequently asked questions about the community, courses, and access.'],
-    ],
-  },
-  {
-    category: '━━ THE FOUNDATION ━━',
-    access: 'member',
-    children: [
-      ['💬・community', 'General market and community conversation.'],
-      ['👋・introductions', 'Introduce yourself, your experience level, and what you want to improve.'],
-      ['🏆・member-wins', 'Share milestones, disciplined execution, and progress.'],
-      ['🧠・trading-mindset', 'Psychology, discipline, process, and consistency.'],
-    ],
-  },
-  {
-    category: '━━ FOUNDATION ESSENTIALS ━━',
-    access: 'essentials',
-    children: [
-      ['📚・course-guide', 'Course roadmap and recommended lesson order for Foundation Essentials.'],
-      ['❓・student-questions', 'Ask questions about the Essentials curriculum and trading foundations.'],
-      ['📓・trade-journals', 'Document trades, process, mistakes, and lessons learned.'],
-      ['📊・chart-review', 'Post charts for educational review and structured feedback.'],
-    ],
-  },
-  {
-    category: '━━ FOUNDATION LIVE ━━',
-    access: 'live',
-    children: [
-      ['🌅・daily-bias', 'Dontradez market outlook, areas of interest, and educational daily bias.'],
-      ['🔴・live-trading', 'Live-session notices, session discussion, and live-trading context.'],
-      ['📈・trade-breakdowns', 'Educational breakdowns of entries, exits, invalidation, and execution.'],
-      ['🌙・market-recaps', 'Post-session recaps: what happened, what changed, and what was learned.'],
-      ['📅・economic-calendar', 'High-impact economic events and session planning reminders.'],
-      { name: '🔊 Live Trading', type: ChannelType.GuildVoice, topic: 'Voice room for scheduled live trading sessions.' },
-      { name: '🔊 Study Room', type: ChannelType.GuildVoice, topic: 'Voice room for study, chart review, and community sessions.' },
-    ],
-  },
-  {
-    category: '━━ FOUNDATION ADVANCED ━━',
-    access: 'advanced',
-    children: [
-      ['🎯・advanced-analysis', 'Higher-level market analysis and execution concepts.'],
-      ['💰・risk-management', 'Account-specific risk structure, position sizing, TP, SL, and break-even planning.'],
-      ['🏦・prop-firms', 'Educational discussion around evaluations, account sizes, rules, and payouts.'],
-      ['📈・scaling', 'Scaling process, account growth, and maintaining consistency as size changes.'],
-      ['🧠・consistency', 'Breaking the pass/fail cycle and building repeatable trading habits.'],
-      ['📓・advanced-journals', 'Advanced journaling, performance review, and process analysis.'],
-    ],
-  },
-  {
-    category: '━━ FOUNDATION PRIVATE ━━',
-    access: 'private',
-    children: [
-      ['🔒・private-members', 'Private mentorship discussion for Foundation Private members.'],
-      ['🎫・book-a-session', 'Private session booking instructions and mentorship scheduling.'],
-    ],
-  },
-  {
-    category: '━━ COMMUNITY ━━',
-    access: 'member',
-    children: [
-      ['💬・general', 'General community conversation outside the structured trading rooms.'],
-      ['🏆・wins', 'Celebrate progress, good process, and community achievements.'],
-      ['📸・charts', 'Casual chart sharing and market discussion.'],
-      ['🎮・off-topic', 'Non-trading conversation and community hangout.'],
-    ],
-  },
-  {
-    category: '━━ SUPPORT ━━',
-    access: 'public',
-    children: [
-      ['🎫・support', 'Access, account, Discord, and Whop support.'],
-      ['💡・suggestions', 'Ideas and feedback for improving The Trading Foundation.'],
-    ],
-  },
+  { category: '━━ START HERE ━━', access: 'public', children: [
+    text('👋・welcome', 'Your introduction to The Trading Foundation. Review the rules to enter the community.', 'readonly'),
+    text('📜・rules', 'Read and accept the rules to unlock the free Community section.', 'readonly'),
+    text('📢・announcements', 'Official updates from Dontradez and The Trading Foundation.', 'readonly'),
+    text('🎓・choose-your-foundation', 'Essential $50 • Premium $100 • Personal Guide $150. Compare what is included.', 'readonly'),
+    text('❓・faq', 'Answers about courses, community access, upgrades, and live teaching.', 'readonly'),
+  ] },
+  { category: '━━ COMMUNITY ━━', access: 'member', children: [
+    text('💬・general', 'Free community conversation for everyone who has accepted the rules.'),
+    text('👋・introductions', 'Introduce yourself and what you want to learn.'),
+    text('🏆・wins', 'Celebrate progress and disciplined execution.'),
+    text('📸・charts', 'Share charts and discuss the markets with the community.'),
+    text('🧠・trading-mindset', 'Discipline, patience, and consistency.'),
+    text('🎮・off-topic', 'Community hangout and non-trading conversation.'),
+    text('👥・member-activity', 'Member joins and departures.', 'readonly'),
+  ] },
+  { category: '━━ THE FOUNDATION ━━', access: 'foundation', children: [
+    text('💬・foundation-chat', 'Shared discussion for Essential, Premium, and Personal Guide members.', 'chat', ['💬・community']),
+    text('🏆・foundation-wins', 'Share progress with fellow Foundation members.', 'chat', ['🏆・member-wins']),
+    text('❓・student-questions', 'Questions about the basic lessons and trading foundations.'),
+    text('📓・trade-journals', 'Document your process, mistakes, and lessons learned.'),
+    text('📊・chart-review', 'Share charts for member discussion. Guided daily reviews are in Personal Guide.'),
+  ] },
+  { category: '━━ ESSENTIAL COURSES ━━', aliases: ['━━ FOUNDATION ESSENTIALS ━━'], access: 'essential', children: [
+    text('📚・course-guide', 'The roadmap for Don’s 10 basic videos. Lessons will be available on Discord and Whop.', 'readonly'),
+    text('🎬・basic-videos', 'Don’s 10 basic trading lessons. Staff will publish the videos here.', 'readonly'),
+  ] },
+  { category: '━━ PREMIUM COURSES ━━', aliases: ['━━ FOUNDATION ADVANCED ━━'], access: 'premium', children: [
+    text('🎬・dons-strategy', 'Don’s advanced strategy and trading journey videos, also available on Whop.', 'readonly'),
+    text('🎯・bubbas-ote', 'Bubba’s OTE and strategy videos, also available on Whop.', 'readonly'),
+    text('❓・strategy-questions', 'Questions about Don’s advanced strategy and journey.'),
+    text('❓・bubbas-questions', 'Questions about Bubba’s OTE lessons and strategy.'),
+    text('🎯・advanced-analysis', 'Discuss advanced market structure and execution concepts.'),
+    text('💰・risk-management', 'Discuss risk planning and position sizing.'),
+    text('🏦・prop-firms', 'Educational discussion of evaluations and account rules.'),
+    text('📈・scaling', 'Discuss process and consistency as account size changes.'),
+    text('🧠・consistency', 'Develop repeatable trading habits.'),
+    text('📓・advanced-journals', 'Performance review and process analysis.'),
+  ] },
+  { category: '━━ PREMIUM DISCUSSION ━━', aliases: ['━━ FOUNDATION LIVE ━━'], access: 'premium', children: [
+    text('🌅・daily-bias', 'Educational market outlook and areas of interest.', 'readonly'),
+    text('📈・trade-breakdowns', 'Staff breakdowns of trade structure and execution.', 'readonly'),
+    text('🌙・market-recaps', 'Educational market recaps.', 'readonly'),
+    text('📅・economic-calendar', 'Economic events and session planning.', 'readonly'),
+    voice('🔊 Study Room'),
+  ] },
+  { category: '━━ PERSONAL GUIDE ━━', aliases: ['━━ FOUNDATION PRIVATE ━━'], access: 'personal', children: [
+    text('📅・course-schedule', 'Schedule for the one-month live course. Dates will be announced here.', 'readonly', ['🎫・book-a-session']),
+    text('🔴・live-classroom-chat', 'Live course discussion and questions for Don.', 'chat', ['🔴・live-trading']),
+    text('❓・course-questions', 'Questions for Don during your guided course.', 'chat', ['🔒・private-members']),
+    text('📥・trade-submissions', 'Submit trades for the daily guided reviews, around 1–2 selected trades per day.'),
+    text('📋・daily-trade-reviews', 'Staff reviews of selected member trades during the one-month course.', 'readonly'),
+    voice('🔊 Live Classroom', 'listen', ['🔊 Live Trading']),
+  ] },
+  { category: '━━ SUPPORT ━━', access: 'public', children: [
+    text('🎫・support', 'Ask for help with Discord, course access, or Whop. Never post private payment details.'),
+    text('💡・suggestions', 'Ideas and feedback for The Trading Foundation.'),
+  ] },
 ];
 
-function textChannel(name, topic) {
-  return { name, topic, type: ChannelType.GuildText };
-}
-
-for (const group of channels) {
-  group.children = group.children.map((item) => {
-    if (Array.isArray(item)) return textChannel(item[0], item[1]);
-    return item;
-  });
-}
-
-const officialChannels = new Set([
-  '📚・course-guide', '🌅・daily-bias', '📈・trade-breakdowns',
-  '🌙・market-recaps', '📅・economic-calendar', '🎫・book-a-session',
-]);
-for (const [index, group] of channels.entries()) {
-  for (const child of group.children) {
-    if (index === 0 || officialChannels.has(child.name)) child.mode = 'readonly';
-    if (child.name === '🔊 Live Trading') child.mode = 'listen';
-  }
-}
-
-module.exports = {
-  roles,
-  access,
-  channels,
-  permissions: {
-    privateCategoryBase: [
-      PermissionFlagsBits.ViewChannel,
-      PermissionFlagsBits.ReadMessageHistory,
-    ],
-  },
+module.exports = { roles, access, channels,
+  permissions: { privateCategoryBase: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
 };

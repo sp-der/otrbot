@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/config/serverBlueprint.js && node --check src/services/syncServer.js"
+    "check": "node --check src/index.js && node --check src/config/serverBlueprint.js && node --check src/services/syncServer.js && node --check src/services/rulesGate.js && node --check src/services/communityCards.js && node --check src/services/membership.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
