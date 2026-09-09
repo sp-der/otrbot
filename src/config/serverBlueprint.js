@@ -38,6 +38,13 @@ const access = {
 
 const text = (name, topic, mode = 'chat', aliases = []) => ({ name, topic, mode, aliases, type: ChannelType.GuildText });
 const voice = (name, mode = 'chat', aliases = []) => ({ name, mode, aliases, type: ChannelType.GuildVoice });
+
+// These channels intentionally live outside categories and are pinned above START HERE.
+// Keep member activity here so /sync and deployments preserve the owner's manual layout.
+const topChannels = [
+  { access: 'member', definition: text('👥・member-activity', 'Member joins and departures.', 'readonly') },
+];
+
 const channels = [
   { category: '━━ START HERE ━━', access: 'public', children: [
     text('👋・welcome', 'Your introduction to The Trading Foundation. Review the rules to enter the community.', 'readonly'),
@@ -45,9 +52,6 @@ const channels = [
     text('📢・announcements', 'Official updates from Dontradez and The Trading Foundation.', 'readonly'),
     text('🎓・choose-your-foundation', 'Essential $50 • Premium $100 • Personal Guide $150. Compare what is included.', 'readonly'),
     text('❓・faq', 'Answers about courses, community access, upgrades, and live teaching.', 'readonly'),
-  ] },
-  { category: '━━ MEMBER ACTIVITY ━━', access: 'member', children: [
-    text('👥・member-activity', 'Member joins and departures.', 'readonly'),
   ] },
   { category: '━━ COMMUNITY ━━', access: 'member', children: [
     text('💬・general', 'Free community conversation for everyone who has accepted the rules.'),
@@ -104,6 +108,6 @@ const channels = [
   ] },
 ];
 
-module.exports = { roles, access, channels,
+module.exports = { roles, access, topChannels, channels,
   permissions: { privateCategoryBase: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
 };
