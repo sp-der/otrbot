@@ -71,6 +71,12 @@ async function discordSocialAccount(userId) {
   return accounts.find(account => account?.service === 'discord' && account?.account_id) || null;
 }
 
+function listForumPosts(experienceId) {
+  const target = String(experienceId || '').trim();
+  if (!target) throw Object.assign(new Error('Whop announcements experience is not configured'), { code: 'WHOP_ANNOUNCEMENTS_EXPERIENCE_MISSING' });
+  return listAll('forum_posts', { experience_id: target });
+}
+
 async function createForumPost(experienceId, { content, pinned = false } = {}) {
   const target = String(experienceId || '').trim();
   const text = String(content || '').trim();
@@ -82,4 +88,4 @@ async function createForumPost(experienceId, { content, pinned = false } = {}) {
   });
 }
 
-module.exports = { API_BASE, companyId, listProducts, listMemberships, discordSocialAccount, createForumPost };
+module.exports = { API_BASE, companyId, listProducts, listMemberships, discordSocialAccount, listForumPosts, createForumPost };

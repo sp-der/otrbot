@@ -48,6 +48,11 @@ class WhopStore {
     return result.rowCount > 0;
   }
 
+  async releaseEvent(eventId) {
+    if (!eventId) return;
+    await this.pool.query('DELETE FROM ttf_whop_events WHERE event_id=$1', [eventId]);
+  }
+
   async upsertMembership(data) {
     if (!data?.id || !data?.user?.id) return;
     await this.pool.query(

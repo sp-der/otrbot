@@ -16,7 +16,7 @@ const { Activity } = require('./services/activity');
 const { postOnboarding, paidWelcome } = require('./services/onboarding');
 const { startWhopWebhookServer } = require('./services/whopWebhook');
 const { WhopManager } = require('./services/whopManager');
-const { createForumPost } = require('./services/whopApi');
+const { createForumPost, listForumPosts } = require('./services/whopApi');
 
 let activity;
 const token = process.env.DISCORD_TOKEN;
@@ -25,6 +25,9 @@ const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'tr
 const whopAnnouncementsExperienceId = String(process.env.WHOP_ANNOUNCEMENTS_EXPERIENCE_ID || 'exp_f1WfbYq4qNxNJU').trim();
 const discordAnnouncementsChannelId = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID || '').trim();
 const discordAnnouncementsChannelName = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_NAME || '📢・announcements').trim();
+const whopAnnouncementPollMs = Math.max(15000, Number(process.env.WHOP_ANNOUNCEMENT_POLL_MS || 30000));
+let whopAnnouncementTimer = null;
+let whopAnnouncementPolling = false;
 const ownerIds = new Set(
   String(process.env.BOT_OWNER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
 );
@@ -100,7 +103,7 @@ client.once('clientReady', async () => {
       activity = new Activity(client, guild);
       try { await activity.init(); }
       catch (error) { console.error('[xp] initialization failed', error.code || error.name); activity = null; }
-      try { await whopManager.init(); }
+      try { await whopManager.init(); startWhopAnnouncementMirror(); }
       catch (error) { console.error('[whop] initialization failed', error.code || error.name); }
     } else {
       console.warn('[xp] DATABASE_URL missing; XP disabled until persistent database is connected');
@@ -226,6 +229,15 @@ function announcementMarkdown(message) {
   return parts.join('\n\n').trim();
 }
 
+function whopSyncEvent(postId, type = 'forum.announcement.sync') {
+  return {
+    id: `forum-sync:${postId}`,
+    type,
+    company_id: process.env.WHOP_COMPANY_ID || undefined,
+    data: { id: postId },
+  };
+}
+
 async function mirrorAnnouncementToWhop(message) {
   if (!message || message.guildId !== guildId || message.author?.bot) return;
   const isAnnouncementChannel = discordAnnouncementsChannelId
@@ -235,8 +247,72 @@ async function mirrorAnnouncementToWhop(message) {
 
   const content = announcementMarkdown(message);
   if (!content) return;
-  await createForumPost(whopAnnouncementsExperienceId, { content });
-  console.log(`[whop] mirrored Discord announcement ${message.id}`);
+  const post = await createForumPost(whopAnnouncementsExperienceId, { content });
+  if (post?.id && process.env.DATABASE_URL) {
+    await whopManager.store.claimEvent(whopSyncEvent(post.id, 'forum.announcement.discord_to_whop'));
+  }
+  console.log(`[whop] mirrored Discord announcement ${message.id}${post?.id ? ` -> ${post.id}` : ''}`);
+}
+
+function whopAnnouncementText(post) {
+  const parts = [];
+  const title = String(post?.title || '').trim();
+  const content = String(post?.content || '').trim();
+  if (title) parts.push(`**${title.slice(0, 180)}**`);
+  if (content) parts.push(content);
+  const author = post?.user?.name || post?.user?.username;
+  if (author) parts.push(`_Posted by ${String(author).slice(0, 80)} on Whop_`);
+  const text = parts.join('\n\n').trim();
+  return text.length <= 1950 ? text : `${text.slice(0, 1910)}\n\n…View the full announcement in Whop.`;
+}
+
+async function resolveDiscordAnnouncementsChannel() {
+  const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+  if (!guild) return null;
+  if (discordAnnouncementsChannelId) {
+    const byId = guild.channels.cache.get(discordAnnouncementsChannelId)
+      || await guild.channels.fetch(discordAnnouncementsChannelId).catch(() => null);
+    if (byId?.isTextBased?.()) return byId;
+  }
+  return guild.channels.cache.find(c => c.name === discordAnnouncementsChannelName && c.isTextBased?.()) || null;
+}
+
+async function mirrorWhopAnnouncementsToDiscord() {
+  if (whopAnnouncementPolling || !process.env.DATABASE_URL) return;
+  whopAnnouncementPolling = true;
+  try {
+    const channel = await resolveDiscordAnnouncementsChannel();
+    if (!channel) throw Object.assign(new Error('Discord announcements channel is unavailable'), { code: 'DISCORD_ANNOUNCEMENTS_CHANNEL_MISSING' });
+    const posts = await listForumPosts(whopAnnouncementsExperienceId);
+    const topLevel = posts
+      .filter(post => post?.id && !post?.parent_id)
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    for (const post of topLevel) {
+      const syncEvent = whopSyncEvent(post.id, 'forum.announcement.whop_to_discord');
+      const claimed = await whopManager.store.claimEvent(syncEvent);
+      if (!claimed) continue;
+      try {
+        const content = whopAnnouncementText(post);
+        if (content) await channel.send({ content, allowedMentions: { parse: [] } });
+        console.log(`[whop] mirrored Whop announcement ${post.id} to Discord`);
+      } catch (error) {
+        await whopManager.store.releaseEvent(syncEvent.id).catch(() => {});
+        throw error;
+      }
+    }
+  } finally {
+    whopAnnouncementPolling = false;
+  }
+}
+
+function startWhopAnnouncementMirror() {
+  if (whopAnnouncementTimer || !process.env.DATABASE_URL) return;
+  const run = () => mirrorWhopAnnouncementsToDiscord()
+    .catch(error => console.error('[whop] reverse announcement mirror failed', error.code || error.name, error.message));
+  run();
+  whopAnnouncementTimer = setInterval(run, whopAnnouncementPollMs);
+  whopAnnouncementTimer.unref?.();
+  console.log(`[whop] Whop -> Discord announcement mirror scheduled every ${Math.round(whopAnnouncementPollMs / 1000)}s`);
 }
 
 client.on('messageCreate', message => {
