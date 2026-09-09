@@ -170,8 +170,9 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
     // Merge the obsolete Live tier into Premium only after all new permissions pass.
     const legacyLive = guild.roles.cache.find(r => r.name === '🥈 Foundation Live');
     if (legacyLive) {
-      await guild.members.fetch();
-      for (const member of legacyLive.members.values()) {
+      const { loadGuildMembers } = require('./membership');
+      const members = await loadGuildMembers(guild);
+      for (const member of members.filter(m => m.roles.cache.has(legacyLive.id)).values()) {
         await member.roles.add(map.get('premium'), REASON);
       }
       await legacyLive.delete(REASON);

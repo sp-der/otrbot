@@ -83,3 +83,16 @@ test('join/leave events are posted only to member activity without notifications
   assert.equal(posts.length, 2); assert.match(posts[0].content, /joined/); assert.match(posts[1].content, /left/);
   assert.deepEqual(posts[0].allowedMentions, { parse: [] });
 });
+
+test('member reconciliation paginates through REST without gateway member requests', async () => {
+  const { loadGuildMembers } = require('../src/services/membership');
+  const calls = [];
+  const page = new Collection(Array.from({ length: 1000 }, (_, i) => [String(i + 1), { id: String(i + 1) }]));
+  const guild = { members: {
+    fetch: () => { throw new Error('gateway request must not run'); },
+    list: async options => { calls.push(options); return calls.length === 1 ? page : new Collection([['1001', { id: '1001' }]]); },
+  } };
+  const members = await loadGuildMembers(guild);
+  assert.equal(members.size, 1001);
+  assert.deepEqual(calls, [{ limit: 1000 }, { limit: 1000, after: '1000' }]);
+});

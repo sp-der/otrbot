@@ -1,3 +1,4 @@
+const { Collection } = require('discord.js');
 const TIERS = ['🥉 Essential', '🥇 Premium', '👑 Personal Guide'];
 const FOUNDATION_ROLE = '🎟️ Foundation Member';
 const pending = new Map();
@@ -23,9 +24,22 @@ async function syncFoundationMember(member) {
   try { await task; } finally { if (pending.get(key) === task) pending.delete(key); }
 }
 
+async function loadGuildMembers(guild) {
+  const members = new Collection();
+  let after;
+  do {
+    const page = await guild.members.list({ limit: 1000, ...(after ? { after } : {}) });
+    for (const [id, member] of page) members.set(id, member);
+    if (page.size < 1000) break;
+    after = page.lastKey();
+  } while (after);
+  return members;
+}
+
 async function syncAllFoundationMembers(guild) {
-  await guild.members.fetch();
-  for (const member of guild.members.cache.values()) await syncFoundationMember(member);
+  // REST pagination handles rate limits without a second gateway member request.
+  const members = await loadGuildMembers(guild);
+  for (const member of members.values()) await syncFoundationMember(member);
   console.log('[membership] verified shared Foundation roles against paid tiers');
 }
 
@@ -38,4 +52,4 @@ async function postMemberActivity(member, joined) {
     allowedMentions: { parse: [] },
   });
 }
-module.exports = { hasPaidTier, syncFoundationMember, syncAllFoundationMembers, postMemberActivity };
+module.exports = { loadGuildMembers, hasPaidTier, syncFoundationMember, syncAllFoundationMembers, postMemberActivity };
