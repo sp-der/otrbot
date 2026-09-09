@@ -16,11 +16,15 @@ const { Activity } = require('./services/activity');
 const { postOnboarding, paidWelcome } = require('./services/onboarding');
 const { startWhopWebhookServer } = require('./services/whopWebhook');
 const { WhopManager } = require('./services/whopManager');
+const { createForumPost } = require('./services/whopApi');
 
 let activity;
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
 const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'true';
+const whopAnnouncementsExperienceId = String(process.env.WHOP_ANNOUNCEMENTS_EXPERIENCE_ID || 'exp_f1WfbYq4qNxNJU').trim();
+const discordAnnouncementsChannelId = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID || '').trim();
+const discordAnnouncementsChannelName = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_NAME || '📣・announcements').trim();
 const ownerIds = new Set(
   String(process.env.BOT_OWNER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
 );
@@ -204,7 +208,41 @@ for (const [event, joined] of [['guildMemberAdd', true], ['guildMemberRemove', f
   });
 }
 
-client.on('messageCreate', message => { if (activity) activity.onMessage(message).catch(e => console.error('[xp] message failed', e.code || e.name)); });
+function announcementMarkdown(message) {
+  const parts = [];
+  const content = String(message.content || '').trim();
+  if (content) parts.push(content);
+
+  for (const attachment of message.attachments.values()) {
+    const label = String(attachment.name || 'Discord attachment').replace(/[\[\]]/g, '');
+    if (attachment.url) parts.push(`[${label}](${attachment.url})`);
+  }
+
+  const author = message.member?.displayName || message.author?.globalName || message.author?.username;
+  const meta = [];
+  if (author) meta.push(`Posted by ${author} in Discord`);
+  if (message.url) meta.push(`[View original message](${message.url})`);
+  if (meta.length) parts.push(`_${meta.join(' · ')}_`);
+  return parts.join('\n\n').trim();
+}
+
+async function mirrorAnnouncementToWhop(message) {
+  if (!message || message.guildId !== guildId || message.author?.bot) return;
+  const isAnnouncementChannel = discordAnnouncementsChannelId
+    ? message.channelId === discordAnnouncementsChannelId
+    : message.channel?.name === discordAnnouncementsChannelName;
+  if (!isAnnouncementChannel) return;
+
+  const content = announcementMarkdown(message);
+  if (!content) return;
+  await createForumPost(whopAnnouncementsExperienceId, { content });
+  console.log(`[whop] mirrored Discord announcement ${message.id}`);
+}
+
+client.on('messageCreate', message => {
+  if (activity) activity.onMessage(message).catch(e => console.error('[xp] message failed', e.code || e.name));
+  mirrorAnnouncementToWhop(message).catch(e => console.error('[whop] announcement mirror failed', e.code || e.name, e.message));
+});
 client.on('voiceStateUpdate', (oldState, state) => { if (activity && state.guild.id === guildId) activity.tick().catch(e => console.error('[xp] voice update failed', e.code || e.name)); });
 client.on('shardDisconnect', () => { if (activity) activity.voice.clear(); });
 client.on('shardResume', () => { if (activity) activity.tick().catch(() => {}); });

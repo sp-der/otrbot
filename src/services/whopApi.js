@@ -13,7 +13,7 @@ function companyId() {
   return id;
 }
 
-async function request(path, { query, base = API_BASE } = {}) {
+async function request(path, { query, base = API_BASE, method = 'GET', body } = {}) {
   const url = new URL(path, `${base}/`);
   for (const [key, value] of Object.entries(query || {})) {
     if (value === undefined || value === null || value === '') continue;
@@ -21,15 +21,26 @@ async function request(path, { query, base = API_BASE } = {}) {
     else url.searchParams.set(key, String(value));
   }
   const response = await fetch(url, {
-    headers: { authorization: `Bearer ${apiKey()}`, accept: 'application/json' },
+    method,
+    headers: {
+      authorization: `Bearer ${apiKey()}`,
+      accept: 'application/json',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) {
-    const error = new Error(`Whop API request failed with ${response.status}`);
+    let details;
+    try { details = await response.json(); } catch {}
+    const suffix = details?.message ? `: ${details.message}` : '';
+    const error = new Error(`Whop API request failed with ${response.status}${suffix}`);
     error.code = `WHOP_HTTP_${response.status}`;
     error.status = response.status;
+    error.details = details;
     throw error;
   }
+  if (response.status === 204) return null;
   return response.json();
 }
 
@@ -60,4 +71,15 @@ async function discordSocialAccount(userId) {
   return accounts.find(account => account?.service === 'discord' && account?.account_id) || null;
 }
 
-module.exports = { API_BASE, companyId, listProducts, listMemberships, discordSocialAccount };
+async function createForumPost(experienceId, { content, pinned = false } = {}) {
+  const target = String(experienceId || '').trim();
+  const text = String(content || '').trim();
+  if (!target) throw Object.assign(new Error('Whop announcements experience is not configured'), { code: 'WHOP_ANNOUNCEMENTS_EXPERIENCE_MISSING' });
+  if (!text) throw Object.assign(new Error('Whop announcement content is empty'), { code: 'WHOP_ANNOUNCEMENT_EMPTY' });
+  return request('forum_posts', {
+    method: 'POST',
+    body: { experience_id: target, content: text, pinned: Boolean(pinned) },
+  });
+}
+
+module.exports = { API_BASE, companyId, listProducts, listMemberships, discordSocialAccount, createForumPost };
