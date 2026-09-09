@@ -24,7 +24,7 @@ const guildId = process.env.DISCORD_GUILD_ID;
 const syncEnabled = String(process.env.ENABLE_SERVER_SYNC).toLowerCase() === 'true';
 const whopAnnouncementsExperienceId = String(process.env.WHOP_ANNOUNCEMENTS_EXPERIENCE_ID || 'exp_f1WfbYq4qNxNJU').trim();
 const discordAnnouncementsChannelId = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_ID || '').trim();
-const discordAnnouncementsChannelName = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_NAME || '📣・announcements').trim();
+const discordAnnouncementsChannelName = String(process.env.DISCORD_ANNOUNCEMENTS_CHANNEL_NAME || '📢・announcements').trim();
 const ownerIds = new Set(
   String(process.env.BOT_OWNER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
 );
