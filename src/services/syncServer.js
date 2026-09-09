@@ -191,6 +191,7 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
     await rebuildOldChannels(guild, rebuildBefore);
     const records = [];
     const topRecords = await ensureTopChannels(guild, botId, map, records);
+    const categoryRecords = [];
     for (const [index, group] of blueprint.channels.entries()) {
       const categoryMode = group.access === 'public' && index === 0 ? 'readonly' : 'chat';
       const categoryOptions = { name: group.category, type: ChannelType.GuildCategory,
@@ -199,7 +200,9 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
         || guild.channels.cache.find(c => group.aliases?.includes(c.name) && c.type === ChannelType.GuildCategory);
       category = category ? await category.edit(categoryOptions) : await guild.channels.create(categoryOptions);
       await category.setPosition(index + topRecords.length);
-      records.push({ id: category.id, group, definition: { name: group.category, type: ChannelType.GuildCategory, mode: categoryMode }, parentId: null });
+      const categoryRecord = { id: category.id, group, definition: { name: group.category, type: ChannelType.GuildCategory, mode: categoryMode }, parentId: null };
+      records.push(categoryRecord);
+      categoryRecords.push(categoryRecord);
       for (const [position, definition] of group.children.entries()) {
         const options = { name: definition.name, type: definition.type, parent: category.id,
           permissionOverwrites: buildOverwrites(guild, botId, group.access, map, definition.mode), reason: REASON };
@@ -213,11 +216,13 @@ async function syncServer(guild, botId, { rebuildBefore } = {}) {
       }
     }
 
-    // Category/channel edits can alter global positions, so pin the top-level channels one final time.
-    for (const [position, record] of topRecords.entries()) {
-      const channel = guild.channels.cache.get(record.id) || await guild.channels.fetch(record.id);
-      await channel.setPosition(position);
-    }
+    // Individual setPosition calls are type-grouped by discord.js. A single bulk PATCH is required
+    // to put an uncategorized text channel ahead of categories in the guild-wide top-level order.
+    await guild.channels.setPositions([
+      ...topRecords.map((record, position) => ({ channel: record.id, position })),
+      ...categoryRecords.map((record, index) => ({ channel: record.id, position: topRecords.length + index })),
+    ]);
+    console.log('[sync] pinned top-level channel order above START HERE');
 
     await verify(guild, botId, map, records, rebuildBefore);
     // Merge the obsolete Live tier into Premium only after all new permissions pass.
