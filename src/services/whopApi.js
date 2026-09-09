@@ -1,5 +1,5 @@
 const API_BASE = 'https://api.whop.com/api/v1';
-const LEGACY_SOCIAL_BASE = 'https://api.whop.com/api/v5/company';
+const LEGACY_SOCIAL_BASE = 'https://api.whop.com/v5/company';
 
 function apiKey() {
   const key = String(process.env.WHOP_COMPANY_API_KEY || '').trim();
@@ -46,11 +46,11 @@ async function listAll(path, query) {
 }
 
 function listProducts() {
-  return listAll('products', { company_id: companyId() });
+  return listAll('products', { account_id: companyId() });
 }
 
 function listMemberships() {
-  return listAll('memberships', { company_id: companyId() });
+  return listAll('memberships', { account_id: companyId() });
 }
 
 async function discordSocialAccount(userId) {
