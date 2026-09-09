@@ -7,7 +7,6 @@ const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 function candidateKeys(secret) {
   const clean = String(secret || '').trim();
   if (!clean) return [];
-
   const keys = [Buffer.from(clean, 'utf8')];
   for (const prefix of ['whsec_', 'ws_']) {
     if (!clean.startsWith(prefix)) continue;
@@ -32,10 +31,8 @@ function verifyWhopSignature(rawBody, headers, secret, nowSeconds = Math.floor(D
   const timestampRaw = headers['webhook-timestamp'];
   const signatureHeader = headers['webhook-signature'];
   if (!webhookId || !timestampRaw || !signatureHeader) return false;
-
   const timestamp = Number(timestampRaw);
   if (!Number.isFinite(timestamp) || Math.abs(nowSeconds - timestamp) > WEBHOOK_TOLERANCE_SECONDS) return false;
-
   const signed = `${webhookId}.${timestampRaw}.${rawBody}`;
   const signatures = String(signatureHeader)
     .split(/\s+/)
@@ -43,7 +40,6 @@ function verifyWhopSignature(rawBody, headers, secret, nowSeconds = Math.floor(D
     .filter(Boolean)
     .map(part => part.split(',', 2))
     .filter(([version, value]) => version === 'v1' && value);
-
   for (const key of candidateKeys(secret)) {
     const expected = crypto.createHmac('sha256', key).update(signed, 'utf8').digest();
     if (signatures.some(([, value]) => safeEqualBase64(value, expected))) return true;
@@ -81,47 +77,39 @@ function readRawBody(req) {
 
 function summarizeEvent(event) {
   const data = event && typeof event.data === 'object' && event.data ? event.data : {};
-  const product = data.product && typeof data.product === 'object' ? data.product.id : undefined;
   return {
     id: event?.id || 'unknown',
     type: event?.type || 'unknown',
     resource: data.id || undefined,
-    product: product || undefined,
+    product: data?.product?.id || undefined,
   };
 }
 
-function startWhopWebhookServer({ client, guildId }) {
+function startWhopWebhookServer({ client, guildId, onEvent }) {
   const port = Number(process.env.PORT || 3000);
   const companyId = String(process.env.WHOP_COMPANY_ID || '').trim();
   const webhookSecret = String(process.env.WHOP_WEBHOOK_SECRET || '').trim();
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
-
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
       send(res, 200, {
         ok: true,
         service: 'otrbot',
         discord: client?.isReady?.() || false,
-        whop: {
-          companyConfigured: Boolean(companyId),
-          webhookSecretConfigured: Boolean(webhookSecret),
-        },
+        whop: { companyConfigured: Boolean(companyId), webhookSecretConfigured: Boolean(webhookSecret) },
       });
       return;
     }
-
     if (url.pathname !== '/api/webhooks/whop') {
       send(res, 404, { error: 'not_found' });
       return;
     }
-
     if (req.method !== 'POST') {
       res.setHeader('allow', 'POST');
       send(res, 405, { error: 'method_not_allowed' });
       return;
     }
-
     if (!webhookSecret) {
       send(res, 503, { error: 'whop_webhook_not_configured' });
       return;
@@ -129,11 +117,7 @@ function startWhopWebhookServer({ client, guildId }) {
 
     let rawBody;
     try { rawBody = await readRawBody(req); }
-    catch (error) {
-      send(res, error.statusCode || 400, { error: 'invalid_request' });
-      return;
-    }
-
+    catch (error) { send(res, error.statusCode || 400, { error: 'invalid_request' }); return; }
     if (!verifyWhopSignature(rawBody, req.headers, webhookSecret)) {
       console.warn('[whop] rejected webhook with invalid signature');
       send(res, 401, { error: 'invalid_signature' });
@@ -142,32 +126,26 @@ function startWhopWebhookServer({ client, guildId }) {
 
     let event;
     try { event = JSON.parse(rawBody); }
-    catch {
-      send(res, 400, { error: 'invalid_json' });
-      return;
-    }
-
-    const eventCompanyId = event?.data?.company_id || event?.company_id;
+    catch { send(res, 400, { error: 'invalid_json' }); return; }
+    const eventCompanyId = event?.company_id || event?.data?.company?.id || event?.data?.company_id;
     if (companyId && eventCompanyId && eventCompanyId !== companyId) {
       console.warn('[whop] rejected webhook for unexpected company');
       send(res, 403, { error: 'wrong_company' });
       return;
     }
 
-    const supported = new Set([
-      'membership.activated',
-      'membership.deactivated',
-      'membership.cancel_at_period_end_changed',
-      'payment.succeeded',
-      'payment.failed',
-      'refund.created',
-    ]);
+    let delivery = { duplicate: false };
+    if (onEvent) {
+      try { delivery = await onEvent(event) || delivery; }
+      catch (error) {
+        console.error('[whop] verified webhook could not be persisted', error.code || error.name);
+        send(res, 500, { error: 'processing_failed' });
+        return;
+      }
+    }
     const summary = summarizeEvent(event);
-    console.log(`[whop] ${supported.has(event.type) ? 'received' : 'ignored'} ${JSON.stringify(summary)}`);
-
-    // Role reconciliation is intentionally added after the three Whop product IDs are mapped.
-    // Until then this endpoint safely verifies and acknowledges real Whop deliveries.
-    send(res, 200, { received: true });
+    console.log(`[whop] ${delivery.duplicate ? 'duplicate' : 'accepted'} ${JSON.stringify(summary)}`);
+    send(res, 200, { received: true, duplicate: Boolean(delivery.duplicate) });
   });
 
   server.on('error', error => console.error('[whop] HTTP server error', error.code || error.name));
