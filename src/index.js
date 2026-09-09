@@ -17,6 +17,7 @@ const { handleSupportInteraction, removeSharedCloseControls } = require('./servi
 
 const { Activity } = require('./services/activity');
 const { postOnboarding, paidWelcome } = require('./services/onboarding');
+const { startWhopWebhookServer } = require('./services/whopWebhook');
 let activity;
 
 const token = process.env.DISCORD_TOKEN;
@@ -202,4 +203,5 @@ client.on('shardResume',()=>{if(activity)activity.tick().catch(()=>{});});
 client.on('error', (error) => console.error('Discord client error:', error));
 process.on('unhandledRejection', (error) => console.error('Unhandled rejection:', error));
 
+startWhopWebhookServer({ client, guildId });
 client.login(token);
