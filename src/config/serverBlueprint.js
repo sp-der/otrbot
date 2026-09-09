@@ -46,6 +46,9 @@ const channels = [
     text('🎓・choose-your-foundation', 'Essential $50 • Premium $100 • Personal Guide $150. Compare what is included.', 'readonly'),
     text('❓・faq', 'Answers about courses, community access, upgrades, and live teaching.', 'readonly'),
   ] },
+  { category: '━━ MEMBER ACTIVITY ━━', access: 'member', children: [
+    text('👥・member-activity', 'Member joins and departures.', 'readonly'),
+  ] },
   { category: '━━ COMMUNITY ━━', access: 'member', children: [
     text('💬・general', 'Free community conversation for everyone who has accepted the rules.'),
     text('👋・introductions', 'Introduce yourself and what you want to learn.'),
@@ -53,7 +56,6 @@ const channels = [
     text('📸・charts', 'Share charts and discuss the markets with the community.'),
     text('🧠・trading-mindset', 'Discipline, patience, and consistency.'),
     text('🎮・off-topic', 'Community hangout and non-trading conversation.'),
-    text('👥・member-activity', 'Member joins and departures.', 'readonly'),
   ] },
   { category: '━━ THE FOUNDATION ━━', access: 'foundation', children: [
     text('💬・foundation-chat', 'Shared discussion for Essential, Premium, and Personal Guide members.', 'chat', ['💬・community']),
@@ -97,7 +99,9 @@ const channels = [
     text('🎫・support', 'Open a private support ticket using the button below.', 'readonly'),
     text('💡・suggestions', 'Ideas and feedback for The Trading Foundation.'),
   ] },
-  { category: '━━ SUPPORT TICKETS ━━', access: 'staff', children: [] },
+  { category: '━━ SUPPORT TICKETS ━━', access: 'staff', children: [
+    text('💳・whop-activity', 'Private Whop membership, payment, refund, and access-sync activity.', 'readonly'),
+  ] },
 ];
 
 module.exports = { roles, access, channels,
